@@ -55,7 +55,6 @@ class _CinemaLocationsScreenState extends State<CinemaLocationsScreen> {
           child: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(child: CustomAppBar()),
-              // Header with chain info
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(18, 24, 18, 28),
@@ -126,7 +125,6 @@ class _CinemaLocationsScreenState extends State<CinemaLocationsScreen> {
                   ),
                 ),
               ),
-              // Search Bar
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -153,7 +151,6 @@ class _CinemaLocationsScreenState extends State<CinemaLocationsScreen> {
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 10)),
-              // Location Cards
               SliverList(
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final location = locations[index];

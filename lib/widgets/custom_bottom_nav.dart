@@ -21,18 +21,17 @@ class CustomBottomNav extends StatelessWidget {
         children: [
           Icon(
             icon,
-            color: selected
-                ? AppColors.white
-                : AppColors.bottomNavInactive,
+            color: selected ? AppColors.white : AppColors.bottomNavInactive,
             size: 24,
           ),
           const SizedBox(height: 4),
           Text(
             label,
             style: TextStyle(
-              color: selected
-                  ? AppColors.bottomNavActive
-                  : AppColors.bottomNavInactive,
+              color:
+                  selected
+                      ? AppColors.bottomNavActive
+                      : AppColors.bottomNavInactive,
               fontSize: 12,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
             ),
@@ -47,7 +46,7 @@ class CustomBottomNav extends StatelessWidget {
     return ClipRRect(
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-        color:  AppColors.bottomNav,
+        color: AppColors.bottomNav,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [

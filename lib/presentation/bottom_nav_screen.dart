@@ -26,7 +26,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
   @override
   Widget build(BuildContext context) {
     final List<Widget> pages = <Widget>[
-      const HomeScreen(),
+      const HomeScreenContent(),
       _buildCinemaPage(),
       const TickScreen(),
       const Center(
@@ -59,7 +59,6 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
           onTap: (i) {
             setState(() {
               _selectedIndex = i;
-              // Reset cinema navigation when switching tabs
               if (i != 1) {
                 _selectedChainName = null;
                 _selectedChainCount = null;
@@ -85,7 +84,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
           setState(() {
             _selectedMovieTitle = null;
           });
-        },
+        }, tmdbId: '',
       );
     } else if (_selectedLocationName != null &&
         _selectedLocationAddress != null) {

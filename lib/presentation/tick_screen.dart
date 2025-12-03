@@ -371,52 +371,54 @@ class _TickScreenState extends State<TickScreen> {
                         ),
                       ],
                     ),
-                      const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: CustomPaint(painter: MiniChartPainter()),
-          ),
-          const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF9D5FFF), Color(0xFFC857FF)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'View Sessions',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                SizedBox(width: 8),
-                Icon(Icons.arrow_forward, color: Colors.white, size: 18),
-              ],
-            
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: CustomPaint(painter: MiniChartPainter()),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF9D5FFF), Color(0xFFC857FF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'View Sessions',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(
+                            Icons.arrow_forward,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        ),
-        
-        ],
-      ),
         ],
       ),
     );
@@ -573,19 +575,16 @@ class _ActivityLineChartPainter extends CustomPainter {
 
     final labelStyle = TextStyle(color: Colors.white70, fontSize: 11);
 
-    // Draw horizontal grid lines
     for (int i = 0; i < 5; i++) {
       double dy = size.height * (1 - i / 4);
       canvas.drawLine(Offset(40, dy), Offset(size.width, dy), gridPaint);
     }
 
-    // Draw vertical grid lines
     for (int i = 0; i < 6; i++) {
       double dx = 40 + (size.width - 40) * i / 5;
       canvas.drawLine(Offset(dx, 0), Offset(dx, size.height), gridPaint);
     }
 
-    // Draw chart line
     final chartPaint =
         Paint()
           ..color = const Color(0xFFB799FF)
@@ -610,7 +609,6 @@ class _ActivityLineChartPainter extends CustomPainter {
     }
     canvas.drawPath(path, chartPaint);
 
-    // Draw Y axis labels
     final yLabels = ["120", "90", "60", "30", "0"];
     for (int i = 0; i < yLabels.length; i++) {
       final tp = TextPainter(
@@ -621,7 +619,6 @@ class _ActivityLineChartPainter extends CustomPainter {
       tp.paint(canvas, Offset(8, dy));
     }
 
-    // Draw X axis labels
     final xLabels = ["02:00", "06:00", "10:00", "14:00", "18:00", "23:00"];
     for (int i = 0; i < xLabels.length; i++) {
       final tp = TextPainter(
@@ -700,19 +697,16 @@ class _PriceTrendChartPainter extends CustomPainter {
 
     final labelStyle = TextStyle(color: Colors.white70, fontSize: 11);
 
-    // Draw horizontal grid lines
     for (int i = 0; i < 5; i++) {
       double dy = size.height * (1 - i / 4);
       canvas.drawLine(Offset(40, dy), Offset(size.width, dy), gridPaint);
     }
 
-    // Draw vertical grid lines
     for (int i = 0; i < 6; i++) {
       double dx = 40 + (size.width - 40) * i / 5;
       canvas.drawLine(Offset(dx, 0), Offset(dx, size.height), gridPaint);
     }
 
-    // Draw chart line
     final chartPaint =
         Paint()
           ..color = const Color(0xFF00D9A3)
@@ -739,7 +733,6 @@ class _PriceTrendChartPainter extends CustomPainter {
     }
     canvas.drawPath(path, chartPaint);
 
-    // Draw Y axis labels
     final yLabels = ["24", "18", "12", "6", "0"];
     for (int i = 0; i < yLabels.length; i++) {
       final tp = TextPainter(
@@ -750,7 +743,6 @@ class _PriceTrendChartPainter extends CustomPainter {
       tp.paint(canvas, Offset(8, dy));
     }
 
-    // Draw X axis labels
     final xLabels = ["Oct 18", "Oct 23", "Oct 28", "Nov 2", "Nov 7", "Nov 13"];
     for (int i = 0; i < xLabels.length; i++) {
       final tp = TextPainter(
@@ -875,7 +867,6 @@ Widget buildDontMissOutSection(List<Map<String, dynamic>> sessions) {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // Movie/cinema cell (poster + text)
                       Expanded(
                         flex: 5,
                         child: Row(
@@ -906,7 +897,6 @@ Widget buildDontMissOutSection(List<Map<String, dynamic>> sessions) {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Movie title, style: white and smaller on newline for subtitle
                                   RichText(
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
@@ -931,7 +921,6 @@ Widget buildDontMissOutSection(List<Map<String, dynamic>> sessions) {
                                     ),
                                   ),
                                   const SizedBox(height: 2),
-                                  // Cinema name, multiple lines
                                   Text(
                                     s['cinema'] ?? "",
                                     style: const TextStyle(
@@ -948,7 +937,6 @@ Widget buildDontMissOutSection(List<Map<String, dynamic>> sessions) {
                           ],
                         ),
                       ),
-                      // Starts In cell
                       Expanded(
                         flex: 3,
                         child: Center(
@@ -978,7 +966,6 @@ Widget buildDontMissOutSection(List<Map<String, dynamic>> sessions) {
                           ),
                         ),
                       ),
-                      // Seats Left cell
                       Expanded(
                         flex: 2,
                         child: Center(
@@ -995,7 +982,6 @@ Widget buildDontMissOutSection(List<Map<String, dynamic>> sessions) {
                           ),
                         ),
                       ),
-                      // Capacity cell
                       Expanded(
                         flex: 3,
                         child: Align(

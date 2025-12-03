@@ -60,7 +60,6 @@ class _CinemaShowtimesScreenState extends State<CinemaShowtimesScreen> {
           child: CustomScrollView(
             slivers: [
               SliverToBoxAdapter(child: CustomAppBar()),
-              // Location Header
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(18, 24, 18, 28),
@@ -129,7 +128,6 @@ class _CinemaShowtimesScreenState extends State<CinemaShowtimesScreen> {
                   ),
                 ),
               ),
-              // Search Bar
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -162,7 +160,7 @@ class _CinemaShowtimesScreenState extends State<CinemaShowtimesScreen> {
                 sliver: SliverGrid(
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    childAspectRatio: 0.6,
+                    childAspectRatio: 0.59,
                     mainAxisSpacing: 16,
                     crossAxisSpacing: 12,
                   ),

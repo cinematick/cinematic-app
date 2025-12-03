@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // 🎨 Background Gradient (matched to screenshot alignment)
   static const Color backgroundTop = Color(
     0xFF1A0B35,
-  ); // dark navy-purple (top-left)
+  );
   static const Color backgroundMid = Color(0xFF4A1B7A); // rich purple (mid)
   static const Color backgroundBottom = Color(
     0xFF1A0B35,
-  );// bright violet (bottom-right)
+  ); // bright violet (bottom-right)
 
   static const Gradient backgroundGradient = LinearGradient(
     begin: Alignment.topLeft,
@@ -22,7 +21,12 @@ class AppColors {
     0xFFFFB64B,
   ); // Orange for Trending tab, stars, icons
   static const Color goldStar = Color(0xFFFFC14C); // For rating stars
-  static const Color orange = Color.fromARGB(255, 238, 112, 67); // Orange for Trending tab, stars, icons
+  static const Color orange = Color.fromARGB(
+    255,
+    238,
+    112,
+    67,
+  ); // Orange for Trending tab, stars, icons
 
   // 🟣 Selected Chip / Tab
   static const Color selectedChipPurple = Color(
@@ -76,16 +80,15 @@ class AppColors {
 
   // 🧭 Filter Icon
   static const Color filterIcon = Color(0xFFDAD6F3); // Soft lavender-white tone
-    static const Gradient filterGradient = LinearGradient(
-colors: [
-        Color.fromARGB(255, 151, 109, 247), // vibrant purple (left)
-        Color.fromARGB(255, 80, 142, 241), // bright blue (right)
-        Color.fromARGB(255, 109, 111, 241), // indigo (mid)
-
-                            ],
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            stops: const [0.0, 0.5, 1.0],
+  static const Gradient filterGradient = LinearGradient(
+    colors: [
+      Color.fromARGB(255, 151, 109, 247), // vibrant purple (left)
+      Color.fromARGB(255, 80, 142, 241), // bright blue (right)
+      Color.fromARGB(255, 109, 111, 241), // indigo (mid)
+    ],
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    stops: const [0.0, 0.5, 1.0],
   );
 
   // ⚙️ Utility
