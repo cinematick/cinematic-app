@@ -27,7 +27,7 @@ class ShowTimeScreen extends StatefulWidget {
 
 class _ShowTimeScreenState extends State<ShowTimeScreen> {
   int selectedDateIndex = 0;
-  int selectedLangIndex = 0;
+  int selectedLangIndex = -1;
   int selectedInfoIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _isLoading = true;
@@ -45,6 +45,8 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
     'Punjabi',
     'Korean',
     'Japanese',
+    'Italian',
+    'Mandarin',
   ];
   final List<String> _allExperiences = ['2D', '3D', 'IMAX', 'Dolby'];
   final List<String> _allGenres = [
@@ -70,6 +72,11 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
     _fetchShowtimes();
   }
 
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   Future<void> _fetchShowtimes() async {
     try {
       final response = await http.get(
@@ -77,6 +84,8 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
           'https://shark-app-t9il5.ondigitalocean.app/v1/movies/${widget.tmdbId}/showtimes',
         ),
       );
+
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -94,12 +103,14 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
           _isLoading = false;
         });
       } else {
+        if (!mounted) return;
         setState(() {
           _errorMessage = 'Failed to load showtimes';
           _isLoading = false;
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = 'Error: $e';
         _isLoading = false;
@@ -115,6 +126,8 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
           'https://shark-app-t9il5.ondigitalocean.app/v1/movies/${widget.tmdbId}/showtimes',
         ),
       );
+
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -132,8 +145,9 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
               return matches;
             }).toList();
 
+        if (!mounted) return;
         setState(() {
-          _showtimes = allShowtimes; 
+          _showtimes = allShowtimes;
           print('Total showtimes: ${allShowtimes.length}');
           print('Found ${filteredShowtimes.length} showtimes for $dateStr');
           print(
@@ -175,86 +189,38 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
   }
 
   List<Map<String, dynamic>> _generateDates() {
-    if (_showtimes.isEmpty) {
-      List<Map<String, dynamic>> dates = [];
-      final now = DateTime.now();
-      for (int i = 0; i < 6; i++) {
-        final date = now.add(Duration(days: i));
-        final dayName =
-            ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][(date.weekday %
-                7)];
-        final monthName =
-            [
-              'Jan',
-              'Feb',
-              'Mar',
-              'Apr',
-              'May',
-              'Jun',
-              'Jul',
-              'Aug',
-              'Sep',
-              'Oct',
-              'Nov',
-              'Dec',
-            ][date.month - 1];
-
-        dates.add({
-          'label': dayName,
-          'num': date.day.toString(),
-          'month': monthName,
-          'dateStr':
-              '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
-        });
-      }
-      return dates;
-    }
-
-    Set<String> uniqueDates = {};
-    for (var showtime in _showtimes) {
-      String dateStr = showtime['start_time'].toString().substring(0, 10);
-      uniqueDates.add(dateStr);
-    }
-
-    List<String> sortedDates = uniqueDates.toList()..sort();
     List<Map<String, dynamic>> dates = [];
+    final now = DateTime.now();
 
-    for (var dateStr in sortedDates) {
-      try {
-        final dateObj = DateTime.parse(dateStr);
-        final dayName =
-            ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][(dateObj.weekday %
-                7)];
-        final monthName =
-            [
-              'Jan',
-              'Feb',
-              'Mar',
-              'Apr',
-              'May',
-              'Jun',
-              'Jul',
-              'Aug',
-              'Sep',
-              'Oct',
-              'Nov',
-              'Dec',
-            ][dateObj.month - 1];
+    // Always generate 6 days regardless of API data
+    for (int i = 0; i < 6; i++) {
+      final date = now.add(Duration(days: i));
+      final dayName =
+          ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][(date.weekday % 7)];
+      final monthName =
+          [
+            'Jan',
+            'Feb',
+            'Mar',
+            'Apr',
+            'May',
+            'Jun',
+            'Jul',
+            'Aug',
+            'Sep',
+            'Oct',
+            'Nov',
+            'Dec',
+          ][date.month - 1];
 
-        dates.add({
-          'label': dayName,
-          'num': dateObj.day.toString(),
-          'month': monthName,
-          'dateStr': dateStr,
-        });
-      } catch (e) {
-        print('Error parsing date: $dateStr - $e');
-      }
+      dates.add({
+        'label': dayName,
+        'num': date.day.toString(),
+        'month': monthName,
+        'dateStr':
+            '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+      });
     }
-
-    print(
-      'Generated dates from API: ${dates.map((d) => d['dateStr']).toList()}',
-    );
     return dates;
   }
 
@@ -364,12 +330,13 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
         child: SafeArea(
           child: CustomScrollView(
             slivers: [
-              SliverToBoxAdapter(child: CustomAppBar()),
+              const SliverToBoxAdapter(child: CustomAppBar()),
               SliverToBoxAdapter(
                 child: Stack(
                   children: [
+                    // Blurry background image
                     ImageFiltered(
-                      imageFilter: ui.ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+                      imageFilter: ui.ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                       child: ClipRRect(
                         child: Image.network(
                           bannerImage,
@@ -383,6 +350,21 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                             );
                           },
                         ),
+                      ),
+                    ),
+                    // Main image on top (not blurred)
+                    ClipRRect(
+                      child: Image.network(
+                        bannerImage,
+                        height: 300,
+                        width: double.infinity,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 300,
+                            color: Colors.grey[800],
+                          );
+                        },
                       ),
                     ),
                     Container(
@@ -407,8 +389,8 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                       left: 16,
                       top: 20,
                       child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color.fromARGB(179, 47, 46, 46),
+                        decoration: const BoxDecoration(
+                          color: Color.fromARGB(179, 47, 46, 46),
                           shape: BoxShape.circle,
                         ),
                         child: IconButton(
@@ -451,7 +433,7 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                           const SizedBox(height: 9),
                           Row(
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.star_border_rounded,
                                 color: AppColors.goldStar,
                                 size: 20,
@@ -564,13 +546,13 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                 child: Builder(
                   builder:
                       (context) => Container(
-                        margin: EdgeInsets.only(top: 14, bottom: 10),
+                        margin: const EdgeInsets.only(top: 14, bottom: 10),
                         height: 32,
                         width: double.infinity,
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
-                          physics: BouncingScrollPhysics(),
-                          itemCount: langList.length + 1,
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: langList.length + 2,
                           itemBuilder: (context, i) {
                             if (i == 0) {
                               return Padding(
@@ -585,14 +567,14 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                                               ?.openDrawer(),
                                   child: Container(
                                     alignment: Alignment.center,
-                                    padding: EdgeInsets.symmetric(
+                                    padding: const EdgeInsets.symmetric(
                                       horizontal: 12,
                                     ),
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(13),
                                       color: Colors.white.withOpacity(0.11),
                                     ),
-                                    child: Icon(
+                                    child: const Icon(
                                       Icons.filter_alt,
                                       color: Colors.white,
                                       size: 19,
@@ -601,18 +583,84 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                                 ),
                               );
                             }
-                            final langIdx = i - 1;
+
+                            if (i == 1) {
+                              // All languages chip
+                              final allSelected = selectedLangIndex == -1;
+                              return Padding(
+                                padding: const EdgeInsets.only(
+                                  left: 0,
+                                  right: 8,
+                                ),
+                                child: GestureDetector(
+                                  onTap:
+                                      () => setState(() {
+                                        selectedLangIndex = -1;
+                                      }),
+                                  child: Container(
+                                    alignment: Alignment.center,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(13),
+                                      color:
+                                          allSelected
+                                              ? AppColors.white
+                                              : Colors.white.withOpacity(0.11),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          'All',
+                                          strutStyle: const StrutStyle(
+                                            forceStrutHeight: true,
+                                            height: 1.0,
+                                            leading: 0,
+                                          ),
+                                          textHeightBehavior:
+                                              const TextHeightBehavior(
+                                                applyHeightToFirstAscent: false,
+                                                applyHeightToLastDescent: false,
+                                              ),
+                                          style: TextStyle(
+                                            height: 1.0,
+                                            color:
+                                                allSelected
+                                                    ? Colors.black
+                                                    : Colors.white60,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final langIdx = i - 2;
                             final selected = langIdx == selectedLangIndex;
                             return Padding(
-                              padding: EdgeInsets.only(left: 0, right: 8),
+                              padding: const EdgeInsets.only(left: 0, right: 8),
                               child: GestureDetector(
                                 onTap:
-                                    () => setState(
-                                      () => selectedLangIndex = langIdx,
-                                    ),
+                                    () => setState(() {
+                                      if (selected) {
+                                        // Deselect by resetting to -1
+                                        selectedLangIndex = -1;
+                                      } else {
+                                        // Select the language
+                                        selectedLangIndex = langIdx;
+                                      }
+                                    }),
                                 child: Container(
                                   alignment: Alignment.center,
-                                  padding: EdgeInsets.symmetric(horizontal: 18),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 18,
+                                  ),
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(13),
                                     color:
@@ -656,17 +704,43 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                     horizontal: 12,
                     vertical: 6,
                   ),
-                  child: InfoRowCard(
-                    selected: selectedInfoIndex,
-                    onChanged: (idx) => setState(() => selectedInfoIndex = idx),
+                  child: Builder(
+                    builder: (context) {
+                      // Calculate cheapest price from all showtimes
+                      num cheapestPrice = double.maxFinite;
+                      for (var showtime in _showtimes) {
+                        final seats =
+                            (showtime['seats'] as List?)
+                                ?.cast<Map<String, dynamic>>() ??
+                            [];
+                        if (seats.isNotEmpty) {
+                          final price = seats
+                              .map((s) => s['price'] as num)
+                              .reduce((a, b) => a < b ? a : b);
+                          if (price < cheapestPrice) {
+                            cheapestPrice = price;
+                          }
+                        }
+                      }
+
+                      return InfoRowCard(
+                        selected: selectedInfoIndex,
+                        onChanged:
+                            (idx) => setState(() => selectedInfoIndex = idx),
+                        cheapestPrice:
+                            cheapestPrice == double.maxFinite
+                                ? 0
+                                : cheapestPrice,
+                      );
+                    },
                   ),
                 ),
               ),
               if (_isLoading)
-                SliverToBoxAdapter(
+                const SliverToBoxAdapter(
                   child: Center(
                     child: Padding(
-                      padding: const EdgeInsets.all(32.0),
+                      padding: EdgeInsets.all(32.0),
                       child: CircularProgressIndicator(),
                     ),
                   ),
@@ -684,10 +758,10 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                   ),
                 )
               else if (_showtimes.isEmpty)
-                SliverToBoxAdapter(
+                const SliverToBoxAdapter(
                   child: Center(
                     child: Padding(
-                      padding: const EdgeInsets.all(32.0),
+                      padding: EdgeInsets.all(32.0),
                       child: Text(
                         'No showtimes available',
                         style: TextStyle(color: Colors.white70),
@@ -722,15 +796,22 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                       final showtimesForDate =
                           groupedByDate[selectedDate] ?? [];
 
-                      final selectedLanguage = _allLanguages[selectedLangIndex];
+                      final selectedLanguage =
+                          selectedLangIndex == -1
+                              ? null
+                              : _allLanguages[selectedLangIndex];
                       final filteredShowtimes =
                           showtimesForDate.where((showtime) {
+                            if (selectedLanguage == null) {
+                              return true; // Show all when no language selected
+                            }
                             final language = showtime['language'] ?? '';
                             return language.toString().toLowerCase().contains(
                               selectedLanguage.toLowerCase(),
                             );
                           }).toList();
 
+                      // Group filtered showtimes by theatre
                       final groupedByTheatre =
                           <String, List<Map<String, dynamic>>>{};
                       for (var showtime in filteredShowtimes) {
@@ -741,6 +822,14 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                         }
                         groupedByTheatre[theatreName]!.add(showtime);
                       }
+
+                      // Sort theatres by cheapest price (ascending order)
+                      final sortedTheatres = groupedByTheatre.entries.toList();
+                      sortedTheatres.sort((a, b) {
+                        final minPriceA = _getMinPrice(a.value);
+                        final minPriceB = _getMinPrice(b.value);
+                        return minPriceA.compareTo(minPriceB);
+                      });
 
                       if (index == 0 && filteredShowtimes.isEmpty) {
                         return Center(
@@ -767,14 +856,15 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                         );
                       }
 
-                      if (index >= groupedByTheatre.length) {
+                      if (index >= sortedTheatres.length) {
                         return const SizedBox.shrink();
                       }
 
-                      final theatreName = groupedByTheatre.keys.toList()[index];
-                      final theatreShowtimes = groupedByTheatre[theatreName]!;
+                      final theatreName = sortedTheatres[index].key;
+                      final theatreShowtimes = sortedTheatres[index].value;
                       final firstShowtime = theatreShowtimes.first;
                       final cinema = firstShowtime['cinema'];
+                      final minPrice = _getMinPrice(theatreShowtimes);
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(
@@ -865,9 +955,9 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                                               borderRadius:
                                                   BorderRadius.circular(20),
                                             ),
-                                            child: Row(
+                                            child: const Row(
                                               mainAxisSize: MainAxisSize.min,
-                                              children: const [
+                                              children: [
                                                 Icon(
                                                   Icons.star,
                                                   size: 12,
@@ -1015,8 +1105,8 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                             ),
                           ),
                         ),
-                        );
-                      },
+                      );
+                    },
                     childCount:
                         _generatedDates.isEmpty
                             ? 0
@@ -1028,7 +1118,9 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                               final selectedDate =
                                   _generatedDates[safeIndex]['dateStr'];
                               final selectedLanguage =
-                                  _allLanguages[selectedLangIndex];
+                                  selectedLangIndex == -1
+                                      ? null
+                                      : _allLanguages[selectedLangIndex];
 
                               final groupedByDate = _groupShowtimesByDate(
                                 _showtimes,
@@ -1037,6 +1129,9 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                                   groupedByDate[selectedDate] ?? [];
                               final filteredShowtimes =
                                   showtimesForDate.where((showtime) {
+                                    if (selectedLanguage == null) {
+                                      return true;
+                                    }
                                     final language = showtime['language'] ?? '';
                                     return language
                                         .toString()
@@ -1063,7 +1158,7 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
                             }()),
                   ),
                 ),
-              SliverToBoxAdapter(child: const SizedBox(height: 20)),
+              const SliverToBoxAdapter(child: SizedBox(height: 20)),
             ],
           ),
         ),
@@ -1080,5 +1175,22 @@ class _ShowTimeScreenState extends State<ShowTimeScreen> {
     } catch (e) {
       return 'N/A';
     }
+  }
+
+  num _getMinPrice(List<Map<String, dynamic>> showtimes) {
+    num minPrice = double.maxFinite;
+    for (var showtime in showtimes) {
+      final seats =
+          (showtime['seats'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+      if (seats.isNotEmpty) {
+        final price = seats
+            .map((s) => s['price'] as num)
+            .reduce((a, b) => a < b ? a : b);
+        if (price < minPrice) {
+          minPrice = price;
+        }
+      }
+    }
+    return minPrice == double.maxFinite ? 0 : minPrice;
   }
 }

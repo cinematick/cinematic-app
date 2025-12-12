@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../services/movie_service.dart';
-import 'movie_filter_service.dart';
+import 'package:cinematick/core/services/api_service.dart';
+import '../../widgets/movie_filter_service.dart';
 
 class HomeScreenController {
-  late MovieService _movieService;
+  late ApiService _apiService;
   late MovieFilterService _filterService;
 
   int tabIndex = 0;
@@ -34,6 +34,8 @@ class HomeScreenController {
     'Punjabi',
     'Korean',
     'Japanese',
+    'Italian',
+    'Mandarin',
   ];
   static const List<String> allExperiences = ['2D', '3D', 'IMAX', 'Dolby'];
   static const List<String> allGenres = [
@@ -63,7 +65,7 @@ class HomeScreenController {
   final VoidCallback? onStateChange;
 
   HomeScreenController({this.onStateChange}) {
-    _movieService = MovieService();
+    _apiService = ApiService();
     _filterService = MovieFilterService();
     _initializeFilters();
   }
@@ -89,7 +91,7 @@ class HomeScreenController {
     errorMessage = null;
 
     try {
-      trendingMovies = await _movieService.fetchMovies();
+      trendingMovies = await _apiService.fetchMovies();
     } catch (err) {
       errorMessage = 'Failed to load movies: $err';
       trendingMovies = [];
@@ -115,16 +117,28 @@ class HomeScreenController {
   List<Map<String, dynamic>> get trendingTop10 =>
       _filterService.sortAndLimitTrendingMovies(filteredTrendingMovies, 10);
 
-  void toggleChip(int idx) {
-    if (idx < 0 || idx >= langSelected.length) return;
-    langSelected[idx] = !langSelected[idx];
-    if (!langSelected.contains(true)) {
-      selectedLangIndex = idx;
-    } else if (!langSelected[selectedLangIndex]) {
-      final first = langSelected.indexWhere((e) => e);
-      if (first != -1) selectedLangIndex = first;
+  void toggleChip(int index) {
+    // If currently showing all languages (selectedLangIndex == -1),
+    // clicking a chip should select only that language
+    if (selectedLangIndex == -1) {
+      selectedLangIndex = index;
+      for (int i = 0; i < langSelected.length; i++) {
+        langSelected[i] = (i == index);
+      }
+    } else if (selectedLangIndex == index) {
+      // Deselect current language, show all
+      selectedLangIndex = -1;
+      for (int i = 0; i < langSelected.length; i++) {
+        langSelected[i] = false;
+      }
+    } else {
+      // Switch to different language
+      selectedLangIndex = index;
+      for (int i = 0; i < langSelected.length; i++) {
+        langSelected[i] = (i == index);
+      }
     }
-    trendingPage = 0;
+    onStateChange?.call();
   }
 
   void syncChipFromDrawer() {

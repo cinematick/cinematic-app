@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:cinematick/presentation/show_time_screen.dart';
+import 'package:cinematick/views/show_time_screen.dart';
 import 'package:cinematick/widgets/custom_app_bar.dart';
 import 'package:cinematick/widgets/filter_sheet.dart';
 import 'package:cinematick/widgets/search_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import '../widgets/app_colors.dart';
+import '../../../../widgets/app_colors.dart';
 import 'home_screen_controller.dart';
 import 'home_screen_widgets.dart';
 
@@ -352,9 +352,10 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
-          itemCount: HomeScreenController.langList.length + 1,
+          itemCount: HomeScreenController.langList.length + 2,
           itemBuilder: (context, i) {
             if (i == 0) {
+              // All chips button
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: GestureDetector(
@@ -363,7 +364,61 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                 ),
               );
             }
-            final langIdx = i - 1;
+
+            if (i == 1) {
+              // All languages chip
+              final anySelected = _controller.langSelected.contains(true);
+              final allSelected =
+                  !anySelected && _controller.selectedLangIndex == -1;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _controller.selectedLangIndex = -1;
+                      for (
+                        var j = 0;
+                        j < _controller.langSelected.length;
+                        j++
+                      ) {
+                        _controller.langSelected[j] = false;
+                      }
+                    });
+                  },
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(13),
+                      color:
+                          allSelected
+                              ? AppColors.chipSelectedBg
+                              : AppColors.chipUnselectedBg,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        
+                        Text(
+                          'All',
+                          style: TextStyle(
+                            height: 1.0,
+                            color:
+                                allSelected
+                                    ? AppColors.chipSelectedText
+                                    : AppColors.chipUnselectedText,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            final langIdx = i - 2;
             final anySelected = _controller.langSelected.contains(true);
             final selected =
                 anySelected

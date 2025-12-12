@@ -1,16 +1,83 @@
+import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:cinematick/config/secrets.dart';
-import 'package:http/http.dart' as http;
 
-class MovieService {
-  static const String _apiUrl =
-      '$baseUrl/movies';
+class ApiService {
+  static final ApiService _instance = ApiService._internal();
 
+  factory ApiService() {
+    return _instance;
+  }
+
+  ApiService._internal();
+
+  // Cinema Chains
+  Future<List<Map<String, dynamic>>> fetchCinemaChains() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/cinemas/chains'));
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return List<Map<String, dynamic>>.from(data);
+      }
+      throw Exception('Failed to load cinema chains');
+    } catch (e) {
+      throw Exception('Error fetching cinema chains: $e');
+    }
+  }
+
+  // Cinema Locations
+  Future<List<Map<String, dynamic>>> fetchCinemaLocations(
+    String chainId,
+  ) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/cinemas?chain_id=$chainId'),
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return List<Map<String, dynamic>>.from(data);
+      }
+      throw Exception('Failed to load cinema locations');
+    } catch (e) {
+      throw Exception('Error fetching cinema locations: $e');
+    }
+  }
+
+  // Cinema Showtimes
+  Future<Map<String, dynamic>> fetchCinemaShowtimes(String cinemaId) async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/cinemas/$cinemaId'));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      throw Exception('Failed to load showtimes');
+    } catch (e) {
+      throw Exception('Error fetching showtimes: $e');
+    }
+  }
+
+  // Movie Showtimes (TMDB)
+  Future<List<Map<String, dynamic>>> fetchMovieShowtimes(String tmdbId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/movies/$tmdbId/showtimes'),
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return List<Map<String, dynamic>>.from(data);
+      }
+      throw Exception('Failed to load movie showtimes');
+    } catch (e) {
+      throw Exception('Error fetching movie showtimes: $e');
+    }
+  }
+
+  // Fetch all movies (consolidates MovieService.fetchMovies logic)
   Future<List<Map<String, dynamic>>> fetchMovies() async {
     try {
       final response = await http
           .get(
-            Uri.parse(_apiUrl),
+            Uri.parse('$baseUrl/movies'),
             headers: {'Content-Type': 'application/json'},
           )
           .timeout(const Duration(seconds: 30));
@@ -24,11 +91,10 @@ class MovieService {
           }
           return <String, dynamic>{};
         }).toList();
-      } else {
-        throw Exception('Failed to load movies: ${response.statusCode}');
       }
-    } catch (err) {
-      throw Exception('Failed to load movies: $err');
+      throw Exception('Failed to load movies: ${response.statusCode}');
+    } catch (e) {
+      throw Exception('Failed to load movies: $e');
     }
   }
 
@@ -62,6 +128,11 @@ class MovieService {
       'popularity': movie['popularity'] ?? 0,
       'voteAverageNum': movie['voteAverage'] ?? 0,
       'status': movie['status'] ?? 'Released',
+      'youtubeUrl':
+          movie['youtubeUrl'] ??
+          movie['trailerUrl'] ??
+          movie['youtube_url'] ??
+          '',
       ...movie,
     };
   }

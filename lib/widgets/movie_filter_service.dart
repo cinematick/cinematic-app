@@ -11,6 +11,8 @@ class MovieFilterService {
     'Punjabi': 'pa',
     'Korean': 'ko',
     'Japanese': 'ja',
+    'Italian': 'it',
+    'Mandarin': 'zh',
   };
 
   static const Set<String> supportedLangCodes = {
@@ -23,6 +25,8 @@ class MovieFilterService {
     'pa',
     'ko',
     'ja',
+    'it',
+    'zh',
   };
 
   List<Map<String, dynamic>> filterMovies(

@@ -4,7 +4,13 @@ import 'package:flutter/material.dart';
 class InfoRowCard extends StatelessWidget {
   final int selected;
   final ValueChanged<int> onChanged;
-  const InfoRowCard({required this.selected, required this.onChanged});
+  final num? cheapestPrice;
+
+  const InfoRowCard({
+    required this.selected,
+    required this.onChanged,
+    this.cheapestPrice,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -14,7 +20,7 @@ class InfoRowCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(23),
         border: Border.all(color: Colors.white24, width: 1.1),
       ),
-      padding: EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: List.generate(4, (i) {
@@ -23,6 +29,7 @@ class InfoRowCard extends StatelessWidget {
               index: i,
               selected: selected == i,
               onTap: () => onChanged(i),
+              cheapestPrice: cheapestPrice,
             ),
           );
         }),
@@ -35,11 +42,13 @@ class _InfoSection extends StatelessWidget {
   final int index;
   final bool selected;
   final VoidCallback onTap;
+  final num? cheapestPrice;
 
   const _InfoSection({
     required this.index,
     required this.selected,
     required this.onTap,
+    this.cheapestPrice,
   });
 
   @override
@@ -49,7 +58,7 @@ class _InfoSection extends StatelessWidget {
         return GestureDetector(
           onTap: onTap,
           child: Container(
-            margin: EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+            margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
             decoration: BoxDecoration(
               color: selected ? AppColors.orange : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
@@ -64,12 +73,12 @@ class _InfoSection extends StatelessWidget {
                       ]
                       : [],
             ),
-            padding: EdgeInsets.symmetric(vertical: 16),
+            padding: const EdgeInsets.symmetric(vertical: 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '\$16',
+                  '\$${cheapestPrice ?? 0}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -78,8 +87,8 @@ class _InfoSection extends StatelessWidget {
                     fontSize: 20,
                   ),
                 ),
-                SizedBox(height: 3),
-                Row(
+                const SizedBox(height: 3),
+                const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Flexible(
@@ -94,7 +103,6 @@ class _InfoSection extends StatelessWidget {
                         ),
                       ),
                     ),
-                    
                   ],
                 ),
               ],
@@ -105,14 +113,13 @@ class _InfoSection extends StatelessWidget {
         return GestureDetector(
           onTap: onTap,
           child: Container(
-            margin: EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+            margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
             decoration: BoxDecoration(
               color: selected ? AppColors.orange : Colors.transparent,
 
               borderRadius: BorderRadius.circular(10),
-             
             ),
-            padding: EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.symmetric(vertical: 10),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -126,7 +133,7 @@ class _InfoSection extends StatelessWidget {
                     fontSize: 17,
                   ),
                 ),
-            
+
                 Text(
                   'Availability',
                   maxLines: 1,
@@ -137,11 +144,11 @@ class _InfoSection extends StatelessWidget {
                     fontSize: 13,
                   ),
                 ),
-                SizedBox(height: 8),
-                  Container(
+                const SizedBox(height: 8),
+                Container(
                   height: 3,
                   width: 55,
-                  margin: EdgeInsets.only(top: 4, bottom: 5),
+                  margin: const EdgeInsets.only(top: 4, bottom: 5),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.14),
                     borderRadius: BorderRadius.circular(8),
@@ -165,14 +172,13 @@ class _InfoSection extends StatelessWidget {
         return GestureDetector(
           onTap: onTap,
           child: Container(
-            margin: EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+            margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
             decoration: BoxDecoration(
               color: selected ? AppColors.orange : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
-             
             ),
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Column(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: const Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.chair_outlined, color: Colors.white, size: 21),
@@ -195,7 +201,7 @@ class _InfoSection extends StatelessWidget {
         return GestureDetector(
           onTap: onTap,
           child: Container(
-            margin: EdgeInsets.symmetric(vertical: 2, horizontal: 2),
+            margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
             decoration: BoxDecoration(
               color:
                   selected ? Colors.blue.withOpacity(0.18) : Colors.transparent,
@@ -203,8 +209,8 @@ class _InfoSection extends StatelessWidget {
               border:
                   selected ? Border.all(color: Colors.blue, width: 1.3) : null,
             ),
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Column(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: const Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.place_outlined, color: Colors.redAccent, size: 19),
@@ -224,6 +230,6 @@ class _InfoSection extends StatelessWidget {
           ),
         );
     }
-    return SizedBox();
+    return const SizedBox();
   }
 }

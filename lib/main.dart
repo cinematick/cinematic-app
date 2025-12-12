@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'presentation/bottom_nav_screen.dart';
+import 'views/navigation/bottom_nav_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: MyApp()));

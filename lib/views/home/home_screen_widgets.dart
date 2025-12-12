@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../widgets/app_colors.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../widgets/app_colors.dart';
 import 'home_screen_controller.dart';
 
 class HomeScreenWidgets {
@@ -194,6 +195,8 @@ class HomeScreenWidgets {
     final year = (movie['year'] ?? '').toString();
     final description = (movie['description'] ?? '').toString();
     final rating = (movie['rating'] ?? '0').toString();
+    final youtubeUrl =
+        (movie['youtubeUrl'] ?? movie['trailerUrl'] ?? '').toString();
 
     return GestureDetector(
       onTap: () => onMovieTap(movie),
@@ -221,6 +224,43 @@ class HomeScreenWidgets {
             fit: StackFit.expand,
             children: [
               posterWithBackground(safeThumb),
+              Positioned(
+                right: 16,
+                top: 16,
+                child: GestureDetector(
+                  onTap:
+                      youtubeUrl.isNotEmpty
+                          ? () => _launchYoutubeUrl(youtubeUrl)
+                          : null,
+                  child: Container(
+                    width: 45,
+                    height: 45,
+                    decoration: BoxDecoration(
+                      color:
+                          youtubeUrl.isNotEmpty
+                              ? const Color(0xFFE63946)
+                              : Colors.grey[700],
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: (youtubeUrl.isNotEmpty
+                                  ? const Color(0xFFE63946)
+                                  : Colors.grey[700]!)
+                              .withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      Icons.play_arrow,
+                      color:
+                          youtubeUrl.isNotEmpty ? Colors.white : Colors.white54,
+                      size: 28,
+                    ),
+                  ),
+                ),
+              ),
               Positioned(
                 left: 0,
                 right: 0,
@@ -293,6 +333,88 @@ class HomeScreenWidgets {
         ),
       ),
     );
+  }
+
+  static Future<void> _launchYoutubeUrl(String url) async {
+    try {
+      if (url.isEmpty) {
+        print('YouTube URL is empty');
+        return;
+      }
+
+      String formattedUrl = url.trim();
+
+      // If URL doesn't start with http, add https://
+      if (!formattedUrl.startsWith('http://') &&
+          !formattedUrl.startsWith('https://')) {
+        formattedUrl = 'https://$formattedUrl';
+      }
+
+      print('Launching YouTube URL: $formattedUrl');
+
+      // Extract video ID from YouTube URL
+      String? videoId = _extractYoutubeVideoId(formattedUrl);
+
+      if (videoId != null) {
+        // Try YouTube app first with youtube:// scheme
+        final youtubeAppUri = Uri.parse(
+          'youtube://www.youtube.com/watch?v=$videoId',
+        );
+
+        try {
+          if (await canLaunchUrl(youtubeAppUri)) {
+            await launchUrl(
+              youtubeAppUri,
+              mode: LaunchMode.externalApplication,
+            );
+            print('YouTube app opened successfully');
+            return;
+          }
+        } catch (e) {
+          print('YouTube app not available, trying browser: $e');
+        }
+      }
+
+      // Fallback to browser
+      final Uri webUri = Uri.parse(formattedUrl);
+
+      if (await canLaunchUrl(webUri)) {
+        await launchUrl(webUri, mode: LaunchMode.externalApplication);
+        print('Browser opened successfully');
+      } else {
+        print('Cannot launch URL: $formattedUrl');
+        // Try with default mode
+        try {
+          await launchUrl(webUri);
+          print('URL opened with default mode');
+        } catch (e) {
+          print('Failed to launch URL: $e');
+        }
+      }
+    } catch (e) {
+      print('Error launching YouTube URL: $e');
+    }
+  }
+
+  static String? _extractYoutubeVideoId(String url) {
+    try {
+      // Handle youtube.com/watch?v=ID
+      if (url.contains('watch?v=')) {
+        final uri = Uri.parse(url);
+        return uri.queryParameters['v'];
+      }
+      // Handle youtu.be/ID
+      if (url.contains('youtu.be/')) {
+        final parts = url.split('youtu.be/');
+        if (parts.length > 1) {
+          final videoId = parts[1].split('?').first.split('&').first;
+          return videoId.isNotEmpty ? videoId : null;
+        }
+      }
+    } catch (e) {
+      print('Error extracting video ID: $e');
+    }
+    return null;
   }
 
   static Widget buildTrendingIndicators(HomeScreenController controller) {
