@@ -1,23 +1,26 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:cinematick/providers/navigation_providers.dart';
 import 'package:cinematick/views/show_time_screen.dart';
+import 'package:cinematick/views/tick/tick_screen.dart';
 import 'package:cinematick/widgets/custom_app_bar.dart';
 import 'package:cinematick/widgets/filter_sheet.dart';
 import 'package:cinematick/widgets/search_bar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import '../../../../widgets/app_colors.dart';
 import 'home_screen_controller.dart';
 import 'home_screen_widgets.dart';
 
-class HomeScreenContent extends StatefulWidget {
+class HomeScreenContent extends ConsumerStatefulWidget {
   const HomeScreenContent({super.key});
 
   @override
-  State<HomeScreenContent> createState() => _HomeScreenContentState();
+  ConsumerState<HomeScreenContent> createState() => _HomeScreenContentState();
 }
 
-class _HomeScreenContentState extends State<HomeScreenContent> {
+class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
   late HomeScreenController _controller;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   bool _isSearching = false;
@@ -398,7 +401,6 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        
                         Text(
                           'All',
                           style: TextStyle(
@@ -442,62 +444,106 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
 
   Widget _buildTabContent() {
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_controller.tabIndex == 0) ...[
-              const SizedBox(height: 15),
-              HomeScreenWidgets.sectionHeader(
-                'Trending Movies',
-                Icons.trending_up,
-              ),
-              const SizedBox(height: 18),
-              HomeScreenWidgets.buildTrendingCarouselOrList(
-                context,
-                _controller,
-                (page) {
-                  setState(() => _controller.setTrendingPage(page));
-                },
-                _openShowTime,
-              ),
-              const SizedBox(height: 14),
-              HomeScreenWidgets.buildTrendingIndicators(_controller),
-              const SizedBox(height: 16),
-              HomeScreenWidgets.sectionHeader(
-                'Now Playing',
-                Icons.local_movies_outlined,
-              ),
-              const SizedBox(height: 15),
-              HomeScreenWidgets.buildGenericMovieGrid(
-                _controller.filteredNowPlayingMovies,
-                _openShowTime,
-              ),
-              const SizedBox(height: 14),
-            ] else if (_controller.tabIndex == 1) ...[
-              const SizedBox(height: 18),
-              HomeScreenWidgets.sectionHeader(
-                'Now Playing',
-                Icons.local_movies_outlined,
-              ),
-              const SizedBox(height: 18),
-              HomeScreenWidgets.buildGenericMovieGrid(
-                _controller.filteredNowPlayingMovies,
-                _openShowTime,
-              ),
-              const SizedBox(height: 14),
-            ] else ...[
-              const SizedBox(height: 18),
-              HomeScreenWidgets.sectionHeader('Coming Soon', Icons.schedule),
-              const SizedBox(height: 18),
-              HomeScreenWidgets.buildGenericMovieGrid(
-                _controller.filteredComingSoonMovies,
-                _openShowTime,
-              ),
-            ],
-          ],
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final screenWidth = constraints.maxWidth;
+          late double horizontalPadding;
+          late double verticalPadding;
+
+          if (screenWidth > 1200) {
+            horizontalPadding = 24;
+            verticalPadding = 4;
+          } else if (screenWidth > 800) {
+            horizontalPadding = 16;
+            verticalPadding = 3;
+          } else {
+            horizontalPadding = 8;
+            verticalPadding = 3;
+          }
+
+          return Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: horizontalPadding,
+              vertical: verticalPadding,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_controller.tabIndex == -1) ...[
+                  const SizedBox(height: 10),
+                  HomeScreenWidgets.sectionHeader(
+                    'Trending',
+                    Icons.trending_up,
+                    onButtonPressed: _navigateToTickScreen,
+                  ),
+                  const SizedBox(height: 10),
+                  HomeScreenWidgets.buildTrendingCarouselOrList(
+                    context,
+                    _controller,
+                    (page) {
+                      setState(() => _controller.setTrendingPage(page));
+                    },
+                    _openShowTime,
+                  ),
+                  const SizedBox(height: 10),
+                  HomeScreenWidgets.buildTrendingIndicators(_controller),
+                  const SizedBox(height: 18),
+                  HomeScreenWidgets.sectionHeader(
+                    'Now Playing',
+                    Icons.local_movies_outlined,
+                  ),
+                  HomeScreenWidgets.buildGenericMovieGrid(
+                    _controller.filteredNowPlayingMovies,
+                    _openShowTime,
+                  ),
+                  const SizedBox(height: 18),
+                  HomeScreenWidgets.sectionHeader(
+                    'Coming Soon',
+                    Icons.schedule,
+                  ),
+                  HomeScreenWidgets.buildGenericMovieGrid(
+                    _controller.filteredComingSoonMovies,
+                    _openShowTime,
+                  ),
+                  const SizedBox(height: 14),
+                ] else if (_controller.tabIndex == 0) ...[
+                  const SizedBox(height: 18),
+                  HomeScreenWidgets.sectionHeader(
+                    'Trending',
+                    Icons.trending_up,
+                  ),
+                  HomeScreenWidgets.buildGenericMovieGrid(
+                    _controller.filteredTrendingMoviesSortedByRating,
+                    _openShowTime,
+                  ),
+                  const SizedBox(height: 14),
+                ] else if (_controller.tabIndex == 1) ...[
+                  const SizedBox(height: 18),
+                  HomeScreenWidgets.sectionHeader(
+                    'Now Playing',
+                    Icons.local_movies_outlined,
+                  ),
+                  HomeScreenWidgets.buildGenericMovieGrid(
+                    _controller.filteredNowPlayingMovies,
+                    _openShowTime,
+                  ),
+                  const SizedBox(height: 14),
+                ] else ...[
+                  const SizedBox(height: 18),
+                  HomeScreenWidgets.sectionHeader(
+                    'Coming Soon',
+                    Icons.schedule,
+                  ),
+                  const SizedBox(height: 18),
+                  HomeScreenWidgets.buildGenericMovieGrid(
+                    _controller.filteredComingSoonMovies,
+                    _openShowTime,
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -565,5 +611,9 @@ class _HomeScreenContentState extends State<HomeScreenContent> {
             ),
       ),
     );
+  }
+
+  void _navigateToTickScreen() {
+    ref.read(bottomNavIndexProvider.notifier).state = 2;
   }
 }

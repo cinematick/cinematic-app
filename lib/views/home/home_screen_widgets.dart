@@ -100,20 +100,81 @@ class HomeScreenWidgets {
     );
   }
 
-  static Widget sectionHeader(String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, color: AppColors.white, size: 21),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
+  static Widget sectionHeader(String title, IconData icon, {VoidCallback? onButtonPressed}) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = constraints.maxWidth;
+        late double fontSize;
+        late double iconSize;
+
+        if (screenWidth > 1200) {
+          fontSize = 18;
+          iconSize = 23;
+        } else if (screenWidth > 800) {
+          fontSize = 17;
+          iconSize = 22;
+        } else {
+          fontSize = 16;
+          iconSize = 21;
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: AppColors.white, size: iconSize),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            if (onButtonPressed != null)
+              GestureDetector(
+                onTap: onButtonPressed,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentOrange,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.accentOrange.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.local_movies_outlined,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Explore Cinema Tickets',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -505,20 +566,58 @@ class HomeScreenWidgets {
       );
     }
 
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 14,
-        childAspectRatio: 0.66,
-      ),
-      itemCount: movies.length,
-      itemBuilder: (context, index) {
-        final movie = movies[index];
-        final rating = (movie['rating'] ?? '0').toString();
-        return _buildMovieGridItem(movie, rating, onMovieTap);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = constraints.maxWidth;
+
+        // Responsive column count
+        int crossAxisCount;
+        double childAspectRatio;
+        double mainAxisSpacing;
+        double crossAxisSpacing;
+
+        if (screenWidth > 1200) {
+          // Large tablets/desktops
+          crossAxisCount = 4;
+          childAspectRatio = 0.68;
+          mainAxisSpacing = 18;
+          crossAxisSpacing = 16;
+        } else if (screenWidth > 800) {
+          // Tablets
+          crossAxisCount = 3;
+          childAspectRatio = 0.67;
+          mainAxisSpacing = 16;
+          crossAxisSpacing = 14;
+        } else if (screenWidth > 480) {
+          // Large phones
+          crossAxisCount = 2;
+          childAspectRatio = 0.66;
+          mainAxisSpacing = 16;
+          crossAxisSpacing = 14;
+        } else {
+          // Small phones
+          crossAxisCount = 2;
+          childAspectRatio = 0.62;
+          mainAxisSpacing = 12;
+          crossAxisSpacing = 10;
+        }
+
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: mainAxisSpacing,
+            crossAxisSpacing: crossAxisSpacing,
+            childAspectRatio: childAspectRatio,
+          ),
+          itemCount: movies.length,
+          itemBuilder: (context, index) {
+            final movie = movies[index];
+            final rating = (movie['rating'] ?? '0').toString();
+            return _buildMovieGridItem(movie, rating, onMovieTap);
+          },
+        );
       },
     );
   }
@@ -549,6 +648,46 @@ class HomeScreenWidgets {
                   children: [
                     posterWithBackground(_posterOrImage(movie)),
                     Positioned(top: 8, right: 8, child: ratingBadge(rating)),
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: GestureDetector(
+                        onTap: () async {
+                          final youtubeUrl =
+                              (movie['youtubeUrl'] ??
+                                      movie['trailerUrl'] ??
+                                      movie['youtube'] ??
+                                      '')
+                                  .toString()
+                                  .trim();
+
+                          if (youtubeUrl.isNotEmpty) {
+                            try {
+                              if (await canLaunchUrl(Uri.parse(youtubeUrl))) {
+                                await launchUrl(
+                                  Uri.parse(youtubeUrl),
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              }
+                            } catch (e) {
+                              print('Error launching YouTube URL: $e');
+                            }
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.8),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.play_arrow,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

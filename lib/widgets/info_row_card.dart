@@ -5,11 +5,13 @@ class InfoRowCard extends StatelessWidget {
   final int selected;
   final ValueChanged<int> onChanged;
   final num? cheapestPrice;
+  final int availabilityPercentage;
 
   const InfoRowCard({
     required this.selected,
     required this.onChanged,
     this.cheapestPrice,
+    this.availabilityPercentage = 0,
   });
 
   @override
@@ -30,6 +32,7 @@ class InfoRowCard extends StatelessWidget {
               selected: selected == i,
               onTap: () => onChanged(i),
               cheapestPrice: cheapestPrice,
+              availabilityPercentage: availabilityPercentage,
             ),
           );
         }),
@@ -43,12 +46,14 @@ class _InfoSection extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final num? cheapestPrice;
+  final int availabilityPercentage;
 
   const _InfoSection({
     required this.index,
     required this.selected,
     required this.onTap,
     this.cheapestPrice,
+    this.availabilityPercentage = 0,
   });
 
   @override
@@ -124,7 +129,7 @@ class _InfoSection extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '83%',
+                  '$availabilityPercentage%',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -154,7 +159,7 @@ class _InfoSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: FractionallySizedBox(
-                    widthFactor: 0.83,
+                    widthFactor: availabilityPercentage / 100,
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.greenAccent.shade400,

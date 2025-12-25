@@ -7,12 +7,13 @@ class HomeScreenController {
   late ApiService _apiService;
   late MovieFilterService _filterService;
 
-  int tabIndex = 0;
+  int tabIndex = -1;
   int trendingPage = 0;
   int selectedLangIndex = 0;
   int _hintIndex = 0;
 
   List<Map<String, dynamic>> trendingMovies = [];
+  List<Map<String, dynamic>> upcomingMovies = [];
   bool isLoading = false;
   String? errorMessage;
 
@@ -48,10 +49,9 @@ class HomeScreenController {
     'Thriller',
   ];
   static const List<String> searchHints = [
-    'Find premium theatres',
-    'Search movies & shows',
-    'Discover IMAX & 3D',
-    'Browse by language',
+    'Search movies, search cinemas, find cheapest movie, find nearest cinemas',
+    'For cheapest movie take them to tick page with cheapest kpi active',
+    'For nearest cinemas take them to tick page nearest kpi active',
   ];
   static const List<String> langList = [
     'English',
@@ -92,27 +92,40 @@ class HomeScreenController {
 
     try {
       trendingMovies = await _apiService.fetchMovies();
+      upcomingMovies = await _apiService.fetchUpcomingMovies();
+      // Mark upcoming movies with 'Upcoming' status for filtering
+      for (var movie in upcomingMovies) {
+        movie['status'] = 'Upcoming';
+      }
     } catch (err) {
       errorMessage = 'Failed to load movies: $err';
       trendingMovies = [];
+      upcomingMovies = [];
     } finally {
       isLoading = false;
     }
+    onStateChange?.call();
   }
 
   List<Map<String, dynamic>> get filteredTrendingMovies => _filterService
       .filterMovies(trendingMovies, langSelected, genreSelected, 'Released');
 
+  List<Map<String, dynamic>> get filteredTrendingMoviesSortedByRating {
+    final movies = filteredTrendingMovies;
+    final sorted = List<Map<String, dynamic>>.from(movies);
+    sorted.sort((a, b) {
+      final ratingA = double.tryParse((a['rating'] ?? '0').toString()) ?? 0;
+      final ratingB = double.tryParse((b['rating'] ?? '0').toString()) ?? 0;
+      return ratingB.compareTo(ratingA); // Higher rating first
+    });
+    return sorted;
+  }
+
   List<Map<String, dynamic>> get filteredNowPlayingMovies => _filterService
       .filterMovies(trendingMovies, langSelected, genreSelected, 'Released');
 
-  List<Map<String, dynamic>> get filteredComingSoonMovies =>
-      _filterService.filterMoviesByStatus(
-        trendingMovies,
-        langSelected,
-        genreSelected,
-        ['in production', 'post production', 'planned'],
-      );
+  List<Map<String, dynamic>> get filteredComingSoonMovies => _filterService
+      .filterMovies(upcomingMovies, langSelected, genreSelected, 'Upcoming');
 
   List<Map<String, dynamic>> get trendingTop10 =>
       _filterService.sortAndLimitTrendingMovies(filteredTrendingMovies, 10);
@@ -149,7 +162,12 @@ class HomeScreenController {
   }
 
   void setTabIndex(int index) {
-    tabIndex = index;
+    if (tabIndex == index) {
+      // If clicking the same tab, deselect it and show default screen
+      tabIndex = -1;
+    } else {
+      tabIndex = index;
+    }
   }
 
   void setTrendingPage(int page) {

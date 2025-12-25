@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:device_preview/device_preview.dart';
 import 'views/navigation/bottom_nav_screen.dart';
 
 void main() {
-  runApp(const ProviderScope(child: MyApp()));
+  runApp(
+    DevicePreview(
+      enabled: !const bool.fromEnvironment('dart.vm.product'),
+      builder: (context) => const ProviderScope(child: MyApp()),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -16,6 +22,8 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(useMaterial3: true, primarySwatch: Colors.blue),
       home: const BottomNavScreen(),
       debugShowCheckedModeBanner: false,
+      useInheritedMediaQuery: true,
+      builder: DevicePreview.appBuilder,
     );
   }
 }

@@ -29,7 +29,9 @@ class BottomNavScreen extends ConsumerWidget {
         selectedLocation,
         selectedMovie,
       ),
-      const TickScreen(),
+      const TickScreen(tmdbId: '83533',
+        
+      ),
       const Center(
         child: Text('Profile', style: TextStyle(color: AppColors.bottomNav)),
       ),

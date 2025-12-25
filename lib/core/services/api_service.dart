@@ -98,6 +98,32 @@ class ApiService {
     }
   }
 
+  // Fetch upcoming/coming soon movies
+  Future<List<Map<String, dynamic>>> fetchUpcomingMovies() async {
+    try {
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/movies/upcoming'),
+            headers: {'Content-Type': 'application/json'},
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final jsonData = jsonDecode(response.body);
+        final movies = _extractMoviesList(jsonData);
+        return movies.map<Map<String, dynamic>>((movie) {
+          if (movie is Map<String, dynamic>) {
+            return _normalizeMovieData(movie);
+          }
+          return <String, dynamic>{};
+        }).toList();
+      }
+      throw Exception('Failed to load upcoming movies: ${response.statusCode}');
+    } catch (e) {
+      throw Exception('Failed to load upcoming movies: $e');
+    }
+  }
+
   List<dynamic> _extractMoviesList(dynamic jsonData) {
     if (jsonData is List) return jsonData;
     if (jsonData is Map) {
@@ -112,24 +138,28 @@ class ApiService {
 
     return <String, dynamic>{
       'title': movie['title'] ?? movie['name'] ?? 'Unknown',
+      'tmdbId': movie['tmdb_id'] ?? movie['tmdbId'] ?? '',
       'backdropPath': movie['backdropPath'] ?? movie['backdrop_path'] ?? '',
       'posterPath': movie['posterPath'] ?? movie['poster_path'] ?? '',
-      'image': movie['image'] ?? '',
-      'rating': (movie['voteAverage'] ?? 0).toString(),
+      'image': movie['image'] ?? movie['poster_path'] ?? '',
+      'rating': (movie['voteAverage'] ?? movie['vote_average'] ?? 0).toString(),
       'year': _extractYear(
         movie['releaseDate'] ?? movie['release_date'] ?? movie['year'] ?? '',
       ),
       'description': movie['overview'] ?? movie['description'] ?? '',
-      'genres': movie['genres'] ?? movie['genre_names'] ?? [],
+      'genres':
+          movie['genres'] ?? movie['genre_ids'] ?? movie['genre_names'] ?? [],
       'language': langCode,
       'langCode': langCode,
       'original_language': langCode,
       'iso_639_1': langCode,
-      'popularity': movie['popularity'] ?? 0,
-      'voteAverageNum': movie['voteAverage'] ?? 0,
+      'popularity':
+          double.tryParse(movie['popularity']?.toString() ?? '0') ?? 0,
+      'voteAverageNum': movie['voteAverage'] ?? movie['vote_average'] ?? 0,
       'status': movie['status'] ?? 'Released',
       'youtubeUrl':
           movie['youtubeUrl'] ??
+          movie['youtubeurl'] ??
           movie['trailerUrl'] ??
           movie['youtube_url'] ??
           '',
@@ -168,10 +198,15 @@ class ApiService {
         (movie['language'] ??
                 movie['originalLang'] ??
                 movie['original_language'] ??
-                'english')
+                'en')
             .toString()
             .toLowerCase()
             .trim();
+
+    // If rawLang is already a 2-letter code, return it
+    if (rawLang.length == 2) {
+      return rawLang;
+    }
 
     return langNameToCodeMap[rawLang] ?? 'en';
   }
