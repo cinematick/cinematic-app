@@ -4,7 +4,7 @@ import 'app_colors.dart';
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String location;
-  const CustomAppBar({super.key, this.location = 'Sydney'});
+  const CustomAppBar({super.key, this.location = 'NSW'});
 
   @override
   Widget build(BuildContext context) {

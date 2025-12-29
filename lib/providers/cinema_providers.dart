@@ -3,7 +3,6 @@ import 'package:cinematick/repositories/cinema_repository.dart';
 
 final repositoryProvider = Provider((ref) => CinemaRepository());
 
-// Cinema Chain Providers
 final cinemaChainProvider =
     StateNotifierProvider<CinemaChainNotifier, CinemaChainState>((ref) {
       return CinemaChainNotifier(ref.watch(repositoryProvider));
@@ -76,7 +75,6 @@ class CinemaChainNotifier extends StateNotifier<CinemaChainState> {
   }
 }
 
-// Cinema Location Providers
 final cinemaLocationProvider = StateNotifierProvider.family<
   CinemaLocationNotifier,
   CinemaLocationState,

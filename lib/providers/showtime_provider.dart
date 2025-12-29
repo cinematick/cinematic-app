@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:cinematick/config/secrets.dart';
 
 final showtimeProvider =
     FutureProvider.family<List<Map<String, dynamic>>, String>((
@@ -13,7 +14,7 @@ final showtimeProvider =
 
       try {
         final response = await http.get(
-          Uri.parse('baseUrl/movies/$movieId/showtimes'),
+          Uri.parse('$baseUrl/movies/$movieId/showtimes'),
         );
 
         if (response.statusCode == 200) {

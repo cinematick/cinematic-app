@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cinematick/repositories/cinema_repository.dart';
 
-// Cinema Showtimes Provider
 final cinemaShowtimeProvider = StateNotifierProvider.family<
   CinemaShowtimeNotifier,
   CinemaShowtimeState,

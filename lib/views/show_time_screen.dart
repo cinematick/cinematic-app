@@ -2,6 +2,7 @@ import 'package:cinematick/widgets/app_colors.dart';
 import 'package:cinematick/widgets/custom_app_bar.dart';
 import 'package:cinematick/widgets/custom_bottom_nav.dart';
 import 'package:cinematick/providers/navigation_providers.dart';
+import 'package:cinematick/config/secrets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:ui' as ui;
@@ -68,7 +69,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
   List<bool> _xpSelected = [];
   List<bool> _genreSelected = [];
 
-  // City coordinates map for Australian locations (latitude, longitude)
   final Map<String, Map<String, double>> _cityCoordinates = {
     'sydney': {'lat': -33.8688, 'lng': 151.2093},
     'glendale': {'lat': -33.5061, 'lng': 151.4278},
@@ -110,12 +110,12 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     super.initState();
     print('TMDB ID: ${widget.tmdbId}');
 
-    // Initialize state variables from widget parameters
     selectedDateIndex = widget.selectedDateIndex ?? 0;
     selectedLangIndex = widget.selectedLanguageIndex ?? -1;
 
     _xpSelected = List<bool>.filled(_allExperiences.length, false);
     _genreSelected = List<bool>.filled(_allGenres.length, false);
+    _generatedDates = _generateDates();
     _getUserLocation();
     _fetchShowtimes();
   }
@@ -127,7 +127,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
 
   Future<void> _getUserLocation() async {
     try {
-      // First, check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         print('Location services are disabled.');
@@ -145,11 +144,9 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
         return;
       }
 
-      // Check current permission status
       LocationPermission permission = await Geolocator.checkPermission();
       print('Current permission status: $permission');
 
-      // If permission is denied or not determined, request it
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.unableToDetermine) {
         print('Requesting location permission from user...');
@@ -158,7 +155,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
         print('User response to permission request: $permission');
       }
 
-      // Handle different permission responses
       if (permission == LocationPermission.denied) {
         print('User denied location permission.');
         if (mounted) {
@@ -190,7 +186,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
         return;
       }
 
-      // Permission granted, get the position
       if (!mounted) return;
       print('Permission granted. Getting user position...');
       final position = await Geolocator.getCurrentPosition(
@@ -201,7 +196,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
       if (mounted) {
         setState(() {
           _userPosition = position;
-          // Recalculate distances now that we have the user position
           _calculateCinemaDistances();
         });
         print(
@@ -257,8 +251,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     );
   }
 
-  /// Calculate distance between two coordinates using Haversine formula
-  /// Returns distance in kilometers
   double _calculateDistance(
     double userLat,
     double userLng,
@@ -289,8 +281,18 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
 
   Future<void> _fetchShowtimes() async {
     try {
-      // Always use the movie API endpoint for showing showtimes
-      final String apiUrl = 'baseUrl/movies/${widget.tmdbId}/showtimes';
+      String dateStr;
+      if (_generatedDates.isNotEmpty &&
+          selectedDateIndex < _generatedDates.length) {
+        dateStr = _generatedDates[selectedDateIndex]['dateStr'];
+      } else {
+        final now = DateTime.now();
+        dateStr =
+            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      }
+
+      final String apiUrl =
+          '$baseUrl/movies/${widget.tmdbId}/showtimes?date=$dateStr';
       print('Fetching from Movie API: $apiUrl');
 
       final response = await http.get(Uri.parse(apiUrl));
@@ -301,7 +303,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
         final data = jsonDecode(response.body);
         List<Map<String, dynamic>> processedShowtimes = [];
 
-        // Movie API returns a direct array of showtimes
         if (data is List) {
           print('Processing Movie API response with ${data.length} showtimes');
           processedShowtimes = List<Map<String, dynamic>>.from(data);
@@ -311,7 +312,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
           _showtimes = processedShowtimes;
           _availableLanguages = _extractAvailableLanguages();
           _langSelected = List<bool>.filled(_availableLanguages.length, false);
-          _generatedDates = _generateDates();
           _calculateCinemaDistances();
           print(
             'Loaded ${_showtimes.length} total showtimes with ${_generatedDates.length} unique dates',
@@ -342,7 +342,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     }
   }
 
-  /// Process showtimes from cinema API response (same as in cinema_detail_screen)
   List<Map<String, dynamic>> _processShowtimesFromCinemaAPI(
     Map<String, dynamic> apiResponse,
   ) {
@@ -398,7 +397,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
         final city = cinema['city'] as String?;
 
         if (cinemaName != null && city != null) {
-          // Get coordinates from the city name
           final cityLower = city.toLowerCase().trim();
           final coords = _cityCoordinates[cityLower];
 
@@ -427,7 +425,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     try {
       print('Fetching showtimes for date: $dateStr');
       final response = await http.get(
-        Uri.parse('baseUrl/movies/${widget.tmdbId}/showtimes'),
+        Uri.parse('$baseUrl/movies/${widget.tmdbId}/showtimes?date=$dateStr'),
       );
 
       if (!mounted) return;
@@ -436,28 +434,10 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
         final List<dynamic> data = jsonDecode(response.body);
         final allShowtimes = List<Map<String, dynamic>>.from(data);
 
-        final filteredShowtimes =
-            allShowtimes.where((showtime) {
-              final startTimeStr = showtime['start_time']?.toString() ?? '';
-              String showtimeDateStr =
-                  startTimeStr.length >= 10
-                      ? startTimeStr.substring(0, 10)
-                      : startTimeStr;
-              bool matches = showtimeDateStr == dateStr;
-              print(
-                'Showtime date: $showtimeDateStr, Selected: $dateStr, Match: $matches',
-              );
-              return matches;
-            }).toList();
-
         if (!mounted) return;
         setState(() {
           _showtimes = allShowtimes;
-          print('Total showtimes: ${allShowtimes.length}');
-          print('Found ${filteredShowtimes.length} showtimes for $dateStr');
-          print(
-            'Filtered showtimes cinema names: ${filteredShowtimes.map((s) => s['cinema']['name']).toList()}',
-          );
+          print('Total showtimes for $dateStr: ${allShowtimes.length}');
         });
       } else {
         print('Failed to load showtimes: ${response.statusCode}');
@@ -485,7 +465,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     Map<String, List<Map<String, dynamic>>> grouped = {};
     for (var showtime in showtimes) {
       final startTimeStr = showtime['start_time']?.toString() ?? '';
-      // Extract date from start_time (format: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)
       String dateStr =
           startTimeStr.length >= 10
               ? startTimeStr.substring(0, 10)
@@ -505,11 +484,10 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     List<Map<String, dynamic>> dates = [];
     final now = DateTime.now();
 
-    // Always generate 6 days regardless of API data
     for (int i = 0; i < 6; i++) {
       final date = now.add(Duration(days: i));
       final dayName =
-          ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][(date.weekday % 7)];
+          ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(date.weekday % 7)];
       final monthName =
           [
             'Jan',
@@ -537,7 +515,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     return dates;
   }
 
-  /// Extract unique languages available in the API response
   List<String> _extractAvailableLanguages() {
     final languageSet = <String>{};
     for (var showtime in _showtimes) {
@@ -601,7 +578,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
   Widget build(BuildContext context) {
     final mv = widget.movie;
 
-    // Try to get backdrop from multiple sources
     String bannerImage = 'https://picsum.photos/800/500?blur=3'; // default
 
     if (widget.backdropPath?.isNotEmpty == true) {
@@ -611,7 +587,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     } else if (mv?['image']?.isNotEmpty == true) {
       bannerImage = mv!['image'] as String;
     } else if (_showtimes.isNotEmpty) {
-      // Try to get poster from first showtime
       final firstShowtime = _showtimes.first;
     }
 
@@ -658,12 +633,10 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
         onTap: (index) {
           ref.read(bottomNavIndexProvider.notifier).state = index;
           if (index != 1) {
-            // Clear cinema-related providers when navigating away from Cinema tab
             ref.read(selectedCinemaChainProvider.notifier).state = null;
             ref.read(selectedCinemaLocationProvider.notifier).state = null;
             ref.read(selectedMovieTitleProvider.notifier).state = null;
           }
-          // Pop back to the main BottomNavScreen
           Navigator.of(context).popUntil((route) => route.isFirst);
         },
       ),
@@ -702,7 +675,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                               ),
                             ),
                           ),
-                          // Gradient overlay
                           Positioned.fill(
                             child: Container(
                               decoration: BoxDecoration(
@@ -722,7 +694,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                               ),
                             ),
                           ),
-                          // Play button overlay
                           Positioned(
                             right: 20,
                             top: 20,
@@ -743,7 +714,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                     );
                                   }
                                 } else {
-                                  // Fallback to YouTube search if no URL provided
                                   final searchUrl =
                                       'https://www.youtube.com/results?search_query=${Uri.encodeComponent(title + " trailer")}';
                                   if (await canLaunchUrl(
@@ -778,7 +748,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                               ),
                             ),
                           ),
-                          // Back button overlay
                           Positioned(
                             left: 20,
                             top: 20,
@@ -802,7 +771,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                         ],
                       ),
                     ),
-                    // Sticky Header with Title, Rating, Dates, and Languages
                     SliverPersistentHeader(
                       pinned: true,
                       delegate: _StickyHeaderDelegate(
@@ -903,7 +871,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                     : _availableLanguages[selectedLangIndex];
                             final filteredShowtimes =
                                 showtimesForDate.where((showtime) {
-                                  // Language filter
                                   if (selectedLanguage != null) {
                                     final language = showtime['language'] ?? '';
                                     if (!language
@@ -916,18 +883,15 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                     }
                                   }
 
-                                  // Premium filter from InfoRowCard (selectedInfoIndex == 2)
                                   if (selectedInfoIndex == 2) {
-                                    // If Premium is selected in the info row, only show premium seats
                                     if (!_hasPremiumSeats(showtime)) {
                                       return false;
                                     }
                                   }
 
-                                  return true; // Pass all filters
+                                  return true;
                                 }).toList();
 
-                            // Group filtered showtimes by theatre
                             final groupedByTheatre =
                                 <String, List<Map<String, dynamic>>>{};
                             for (var showtime in filteredShowtimes) {
@@ -939,12 +903,10 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                               groupedByTheatre[theatreName]!.add(showtime);
                             }
 
-                            // Sort theatres by selected criteria
                             final sortedTheatres =
                                 groupedByTheatre.entries.toList();
 
                             if (selectedInfoIndex == 1) {
-                              // Sort by availability (max to min)
                               sortedTheatres.sort((a, b) {
                                 final availabilityA = _getMaxAvailability(
                                   a.value,
@@ -955,7 +917,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                 return availabilityB.compareTo(availabilityA);
                               });
                             } else if (selectedInfoIndex == 3) {
-                              // Sort by distance (nearest first)
                               sortedTheatres.sort((a, b) {
                                 final distanceA =
                                     _cinemaDistances[a.key] ?? double.maxFinite;
@@ -964,7 +925,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                 return distanceA.compareTo(distanceB);
                               });
                             } else {
-                              // Sort by cheapest price (ascending order) - default
                               sortedTheatres.sort((a, b) {
                                 final minPriceA = _getMinPrice(a.value);
                                 final minPriceB = _getMinPrice(b.value);
@@ -1013,7 +973,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                             final isSmallScreen = screenWidth < 380;
                             final isMediumScreen = screenWidth < 600;
 
-                            // Responsive flex ratios
                             int infoFlex =
                                 isSmallScreen
                                     ? 3
@@ -1027,455 +986,315 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                     ? 6
                                     : 6;
 
-                            return Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: isSmallScreen ? 12 : 18,
-                                vertical: 8,
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Container(
-                                  decoration: const BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        Color(0xFF5A1EA9),
-                                        Color(0xFF3A0E68),
-                                      ],
+                            return GestureDetector(
+                              onTap: () {},
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    decoration: const BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Color(0xFF5A1EA9),
+                                          Color(0xFF3A0E68),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  child: Padding(
-                                    padding: EdgeInsets.all(
-                                      isSmallScreen ? 10 : 14,
-                                    ),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.center,
-                                      children: [
-                                        // ─── LEFT: THEATRE INFO ───
-                                        Expanded(
-                                          flex: infoFlex,
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
                                             children: [
-                                              Text(
-                                                theatreName,
-                                                maxLines: isSmallScreen ? 1 : 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize:
-                                                      isSmallScreen ? 14 : 16,
-                                                  fontWeight: FontWeight.w700,
+                                              ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                child: Container(
+                                                  width: 67,
+                                                  height: 100,
+                                                  color: Colors.black,
+                                                  child: Image.asset(
+                                                    _getCinemaLogoPath(
+                                                      cinema['name'] ??
+                                                          'Unknown',
+                                                    ),
+                                                    fit: BoxFit.contain,
+                                                    errorBuilder: (
+                                                      context,
+                                                      error,
+                                                      stackTrace,
+                                                    ) {
+                                                      return const Center(
+                                                        child: Icon(
+                                                          Icons.local_movies,
+                                                          color: Colors.white30,
+                                                          size: 40,
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
                                                 ),
                                               ),
-                                              SizedBox(
-                                                height: isSmallScreen ? 4 : 6,
-                                              ),
-                                              Row(
-                                                children: [
-                                                  Icon(
-                                                    Icons.location_on,
-                                                    size:
-                                                        isSmallScreen ? 12 : 14,
-                                                    color: Colors.white70,
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Expanded(
-                                                    child: Text(
-                                                      cinema['address'] ??
-                                                          cinema['city'] ??
-                                                          'Unknown location',
-                                                      maxLines:
-                                                          isSmallScreen ? 1 : 2,
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      cinema['name'] ??
+                                                          'Cinema Name',
+                                                      maxLines: 2,
                                                       overflow:
                                                           TextOverflow.ellipsis,
-                                                      style: TextStyle(
-                                                        color: Colors.white70,
-                                                        fontSize:
-                                                            isSmallScreen
-                                                                ? 9
-                                                                : 11,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              SizedBox(
-                                                height: isSmallScreen ? 4 : 8,
-                                              ),
-                                              SingleChildScrollView(
-                                                scrollDirection:
-                                                    Axis.horizontal,
-                                                child: Row(
-                                                  children: [
-                                                    Icon(
-                                                      Icons.star,
-                                                      size:
-                                                          isSmallScreen
-                                                              ? 12
-                                                              : 14,
-                                                      color: const Color(
-                                                        0xFFFFC107,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      '${cinema['rating'] ?? '4.2'}',
-                                                      style: TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize:
-                                                            isSmallScreen
-                                                                ? 10
-                                                                : 12,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                    SizedBox(
-                                                      width:
-                                                          isSmallScreen
-                                                              ? 6
-                                                              : 10,
-                                                    ),
-                                                    Text(
-                                                      _userPosition != null &&
-                                                              _cinemaDistances
-                                                                  .containsKey(
-                                                                    theatreName,
-                                                                  )
-                                                          ? '${_cinemaDistances[theatreName]!.toStringAsFixed(1)}km'
-                                                          : '${cinema['distance'] ?? 'N/A'}',
                                                       style: const TextStyle(
-                                                        color: Color.fromARGB(
-                                                          251,
-                                                          127,
-                                                          168,
-                                                          251,
-                                                        ),
-                                                        fontSize: 11,
+                                                        color: Colors.white,
+                                                        fontSize: 16,
                                                         fontWeight:
-                                                            FontWeight.w600,
+                                                            FontWeight.w700,
                                                       ),
                                                     ),
+                                                    const SizedBox(height: 6),
+                                                    Row(
+                                                      children: [
+                                                        const Icon(
+                                                          Icons.star,
+                                                          size: 14,
+                                                          color: Color(
+                                                            0xFFFFC107,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 4,
+                                                        ),
+                                                        Text(
+                                                          '${cinema['rating'] ?? '4.2'}',
+                                                          style:
+                                                              const TextStyle(
+                                                                color:
+                                                                    Colors
+                                                                        .white,
+                                                                fontSize: 12,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 12,
+                                                        ),
+                                                        Container(
+                                                          padding:
+                                                              const EdgeInsets.symmetric(
+                                                                horizontal: 8,
+                                                                vertical: 2,
+                                                              ),
+
+                                                          child: Text(
+                                                            (() {
+                                                              final cinemaName =
+                                                                  cinema['name'] ??
+                                                                  'Unknown';
+                                                              final distance =
+                                                                  _cinemaDistances[cinemaName];
+                                                              if (distance !=
+                                                                  null) {
+                                                                return '${distance.toStringAsFixed(1)} km';
+                                                              }
+                                                              return 'N/A';
+                                                            })(),
+                                                            style: const TextStyle(
+                                                              color:
+                                                                  Color.fromARGB(
+                                                                    255,
+                                                                    88,
+                                                                    184,
+                                                                    248,
+                                                                  ),
+                                                              fontSize: 10,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 6),
                                                   ],
                                                 ),
                                               ),
                                             ],
                                           ),
-                                        ),
+                                          const SizedBox(height: 14),
+                                          GridView.builder(
+                                            shrinkWrap: true,
+                                            physics:
+                                                const NeverScrollableScrollPhysics(),
+                                            gridDelegate:
+                                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                                  crossAxisCount: 3,
+                                                  crossAxisSpacing: 10,
+                                                  mainAxisSpacing: 10,
+                                                  childAspectRatio: 1.45,
+                                                ),
+                                            itemCount: theatreShowtimes.length,
+                                            itemBuilder: (context, idx) {
+                                              final showtime =
+                                                  theatreShowtimes[idx];
+                                              final seats =
+                                                  (showtime['seats'] as List?)
+                                                      ?.cast<
+                                                        Map<String, dynamic>
+                                                      >() ??
+                                                  [];
+                                              final minPrice =
+                                                  seats.isNotEmpty
+                                                      ? seats
+                                                          .map(
+                                                            (s) =>
+                                                                s['price']
+                                                                    as num,
+                                                          )
+                                                          .reduce(
+                                                            (a, b) =>
+                                                                a < b ? a : b,
+                                                          )
+                                                      : 0;
 
-                                        SizedBox(width: isSmallScreen ? 3 : 5),
-
-                                        // ─── RIGHT: SHOWTIME PILLS ───
-                                        Expanded(
-                                          flex: showtimeFlex,
-                                          child: SizedBox(
-                                            height: isSmallScreen ? 70 : 78,
-                                            child: ListView.builder(
-                                              scrollDirection: Axis.horizontal,
-                                              physics:
-                                                  const BouncingScrollPhysics(),
-                                              itemCount:
-                                                  theatreShowtimes.length,
-                                              itemBuilder: (context, idx) {
-                                                final showtime =
-                                                    theatreShowtimes[idx];
-                                                final seats =
-                                                    (showtime['seats'] as List?)
-                                                        ?.cast<
-                                                          Map<String, dynamic>
-                                                        >() ??
-                                                    [];
-                                                final minPrice =
-                                                    seats.isNotEmpty
-                                                        ? seats
-                                                            .map(
-                                                              (s) =>
-                                                                  s['price']
-                                                                      as num,
-                                                            )
-                                                            .reduce(
-                                                              (a, b) =>
-                                                                  a < b ? a : b,
-                                                            )
-                                                        : 0;
-
-                                                return Padding(
-                                                  padding: EdgeInsets.only(
-                                                    right:
-                                                        idx ==
-                                                                theatreShowtimes
-                                                                        .length -
-                                                                    1
-                                                            ? 0
-                                                            : isSmallScreen
-                                                            ? 8
-                                                            : 10,
+                                              return GestureDetector(
+                                                onTap: () async {
+                                                  final bookingUrl =
+                                                      showtime['booking_url']
+                                                          as String? ??
+                                                      '';
+                                                  if (bookingUrl.isNotEmpty) {
+                                                    if (await canLaunchUrl(
+                                                      Uri.parse(bookingUrl),
+                                                    )) {
+                                                      await launchUrl(
+                                                        Uri.parse(bookingUrl),
+                                                        mode:
+                                                            LaunchMode
+                                                                .externalApplication,
+                                                      );
+                                                    }
+                                                  }
+                                                },
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white
+                                                        .withOpacity(0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          8,
+                                                        ),
+                                                    border: Border.all(
+                                                      color: Colors.white
+                                                          .withOpacity(0.2),
+                                                      width: 1,
+                                                    ),
                                                   ),
-                                                  child: GestureDetector(
-                                                    onTap: () async {
-                                                      final bookingUrl =
-                                                          showtime['booking_url']
-                                                              as String? ??
-                                                          '';
-                                                      if (bookingUrl
-                                                          .isNotEmpty) {
-                                                        if (await canLaunchUrl(
-                                                          Uri.parse(bookingUrl),
-                                                        )) {
-                                                          await launchUrl(
-                                                            Uri.parse(
-                                                              bookingUrl,
-                                                            ),
-                                                            mode:
-                                                                LaunchMode
-                                                                    .externalApplication,
-                                                          );
-                                                        }
-                                                      }
-                                                    },
-                                                    child: Container(
-                                                      width:
-                                                          isSmallScreen
-                                                              ? 60
-                                                              : 68,
-                                                      padding:
-                                                          EdgeInsets.symmetric(
-                                                            vertical:
-                                                                isSmallScreen
-                                                                    ? 8
-                                                                    : 10,
-                                                            horizontal: 0,
+                                                  child: Padding(
+                                                    padding:
+                                                        const EdgeInsets.all(
+                                                          8.0,
+                                                        ),
+                                                    child: Column(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .center,
+                                                      children: [
+                                                        Text(
+                                                          _formatTime(
+                                                            showtime['start_time'],
                                                           ),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.white
-                                                            .withOpacity(0.16),
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              8,
-                                                            ),
-                                                      ),
-                                                      child: Column(
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .spaceBetween,
-                                                        children: [
-                                                          Column(
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .spaceBetween,
-                                                            children: [
-                                                              // ─── Time ───
-                                                              Text(
-                                                                _formatTime(
-                                                                  showtime['start_time'],
-                                                                ),
-                                                                style: TextStyle(
-                                                                  color:
-                                                                      Colors
-                                                                          .white,
-                                                                  fontSize:
-                                                                      isSmallScreen
-                                                                          ? 16
-                                                                          : 18,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w900,
-                                                                  height: 1.1,
-                                                                ),
-                                                              ),
-                                                              SizedBox(
-                                                                height:
-                                                                    isSmallScreen
-                                                                        ? 1
-                                                                        : 2,
-                                                              ),
-
-                                                              // ─── 2D + Divider (COINCIDED) ───
-                                                              Stack(
-                                                                alignment:
-                                                                    Alignment
-                                                                        .center,
-                                                                children: [
-                                                                  // Divider
-                                                                  SizedBox(
-                                                                    height: 10,
-                                                                    child: ClipRect(
-                                                                      child: Stack(
-                                                                        alignment:
-                                                                            Alignment.center,
-                                                                        children: [
-                                                                          Positioned.fill(
-                                                                            child: LayoutBuilder(
-                                                                              builder: (
-                                                                                context,
-                                                                                constraints,
-                                                                              ) {
-                                                                                final dashCount =
-                                                                                    (constraints.maxWidth /
-                                                                                            6)
-                                                                                        .floor();
-                                                                                return Row(
-                                                                                  mainAxisAlignment:
-                                                                                      MainAxisAlignment.spaceBetween,
-                                                                                  children: List.generate(
-                                                                                    dashCount,
-                                                                                    (
-                                                                                      _,
-                                                                                    ) => Container(
-                                                                                      width:
-                                                                                          3,
-                                                                                      height:
-                                                                                          1,
-                                                                                      color: Colors.white.withOpacity(
-                                                                                        0.4,
-                                                                                      ),
-                                                                                    ),
-                                                                                  ),
-                                                                                );
-                                                                              },
-                                                                            ),
-                                                                          ),
-
-                                                                          // Left half dot
-                                                                          Positioned(
-                                                                            left:
-                                                                                -5,
-                                                                            child: Container(
-                                                                              width:
-                                                                                  10,
-                                                                              height:
-                                                                                  10,
-                                                                              decoration: const BoxDecoration(
-                                                                                color:
-                                                                                    Colors.black54,
-                                                                                shape:
-                                                                                    BoxShape.circle,
-                                                                              ),
-                                                                            ),
-                                                                          ),
-
-                                                                          // Right half dot
-                                                                          Positioned(
-                                                                            right:
-                                                                                -5,
-                                                                            child: Container(
-                                                                              width:
-                                                                                  10,
-                                                                              height:
-                                                                                  10,
-                                                                              decoration: const BoxDecoration(
-                                                                                color:
-                                                                                    Colors.black54,
-                                                                                shape:
-                                                                                    BoxShape.circle,
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                        ],
-                                                                      ),
-                                                                    ),
-                                                                  ),
-
-                                                                  // Screen name from API response
-                                                                  Text(
-                                                                    (showtime['screen']?['name']
-                                                                            as String?) ??
-                                                                        '2D',
-                                                                    style: const TextStyle(
-                                                                      color:
-                                                                          Colors
-                                                                              .white,
-                                                                      fontSize:
-                                                                          10,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .w700,
-                                                                      backgroundColor:
-                                                                          Colors
-                                                                              .transparent,
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              ),
-
-                                                              SizedBox(
-                                                                height:
-                                                                    isSmallScreen
-                                                                        ? 1
-                                                                        : 2,
-                                                              ),
-                                                              Divider(
-                                                                indent: 5,
-                                                                endIndent: 5,
+                                                          style:
+                                                              const TextStyle(
                                                                 color:
                                                                     Colors
-                                                                        .white24,
-                                                                height: 1,
+                                                                        .white,
+                                                                fontSize: 20,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w900,
                                                               ),
-
-                                                              SizedBox(
-                                                                height:
-                                                                    isSmallScreen
-                                                                        ? 1
-                                                                        : 2,
-                                                              ),
-                                                              // ─── Seats + Price ───
-                                                              Padding(
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 6,
+                                                        ),
+                                                        Row(
+                                                          mainAxisAlignment:
+                                                              MainAxisAlignment
+                                                                  .start,
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: [
+                                                            Flexible(
+                                                              child: Container(
                                                                 padding:
                                                                     const EdgeInsets.symmetric(
                                                                       horizontal:
-                                                                          5,
+                                                                          2,
+                                                                      vertical:
+                                                                          2,
                                                                     ),
-                                                                child: Row(
-                                                                  mainAxisAlignment:
-                                                                      MainAxisAlignment
-                                                                          .spaceBetween,
-                                                                  children: [
-                                                                    Text(
-                                                                      '${showtime['total_seats_available'] ?? 0}',
-                                                                      style: TextStyle(
-                                                                        color:
-                                                                            Colors.white,
-                                                                        fontSize:
-                                                                            isSmallScreen
-                                                                                ? 9
-                                                                                : 10,
-                                                                        fontWeight:
-                                                                            FontWeight.w700,
-                                                                      ),
-                                                                    ),
-                                                                    Text(
-                                                                      '\$$minPrice',
-                                                                      style: TextStyle(
-                                                                        color:
-                                                                            Colors.white,
-                                                                        fontSize:
-                                                                            isSmallScreen
-                                                                                ? 10
-                                                                                : 12,
-                                                                        fontWeight:
-                                                                            FontWeight.w900,
-                                                                      ),
-                                                                    ),
-                                                                  ],
+                                                                child: Text(
+                                                                  showtime['screen_name'] ??
+                                                                      'Screen',
+                                                                  overflow:
+                                                                      TextOverflow
+                                                                          .ellipsis,
+                                                                  style: const TextStyle(
+                                                                    color:
+                                                                        Color.fromARGB(
+                                                                          255,
+                                                                          252,
+                                                                          252,
+                                                                          253,
+                                                                        ),
+                                                                    fontSize: 9,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w700,
+                                                                  ),
                                                                 ),
                                                               ),
-                                                            ],
-                                                          ),
-                                                        ],
-                                                      ),
+                                                            ),
+                                                            const SizedBox(
+                                                              width: 10,
+                                                            ),
+                                                            Text(
+                                                              '\$$minPrice',
+                                                              style: const TextStyle(
+                                                                color:
+                                                                    Colors
+                                                                        .white,
+                                                                fontSize: 12,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ],
                                                     ),
                                                   ),
-                                                );
-                                              },
-                                            ),
+                                                ),
+                                              );
+                                            },
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1507,7 +1326,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                         groupedByDate[selectedDate] ?? [];
                                     final filteredShowtimes =
                                         showtimesForDate.where((showtime) {
-                                          // Language filter
                                           if (selectedLanguage != null) {
                                             final language =
                                                 showtime['language'] ?? '';
@@ -1522,7 +1340,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                             }
                                           }
 
-                                          // Premium filter from InfoRowCard (selectedInfoIndex == 2)
                                           if (selectedInfoIndex == 2) {
                                             if (!_hasPremiumSeats(showtime)) {
                                               return false;
@@ -1556,7 +1373,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                   ],
                 ),
               ),
-              // Floating back button that shifts to freeze at top on scroll
               Positioned(
                 left: 20,
                 top:
@@ -1638,7 +1454,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     return maxAvailability;
   }
 
-  /// Check if a showtime has premium seat types (recliner, daybed, platinum, etc.)
   bool _hasPremiumSeats(Map<String, dynamic> showtime) {
     final seats =
         (showtime['seats'] as List?)?.cast<Map<String, dynamic>>() ?? [];
@@ -1646,7 +1461,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
 
     for (var seat in seats) {
       final seatType = (seat['type'] as String?)?.toLowerCase() ?? '';
-      // Check for premium seat types
       if (seatType.contains('recliner') ||
           seatType.contains('daybed') ||
           seatType.contains('platinum') ||
@@ -1656,6 +1470,22 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
       }
     }
     return false;
+  }
+
+  String _getCinemaLogoPath(String cinemaName) {
+    final nameLower = cinemaName.toLowerCase();
+
+    if (nameLower.contains('event')) {
+      return 'lib/assets/event.png';
+    } else if (nameLower.contains('hoyts')) {
+      return 'lib/assets/hoyts.png';
+    } else if (nameLower.contains('read')) {
+      return 'lib/assets/read.png';
+    } else if (nameLower.contains('village')) {
+      return 'lib/assets/village.png';
+    } else {
+      return 'lib/assets/village.png';
+    }
   }
 }
 
@@ -1705,7 +1535,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title and Rating
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Column(
@@ -1745,7 +1574,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
               ],
             ),
           ),
-          // Date Picker
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: SizedBox(
@@ -1824,7 +1652,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                       ),
             ),
           ),
-          // Language Filter
           Padding(
             padding: const EdgeInsets.only(bottom: 8, left: 12),
             child: SizedBox(
@@ -1885,7 +1712,8 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                                   : AppColors.chipUnselectedBg,
                         ),
                         child: Text(
-                          langList[langIdx],
+                          langList[langIdx][0].toUpperCase() +
+                              langList[langIdx].substring(1),
                           style: TextStyle(
                             color:
                                 selected
@@ -1902,12 +1730,10 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
               ),
             ),
           ),
-          // Info Cards (Price, Availability, Premium, Nearest)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: Builder(
               builder: (context) {
-                // Calculate cheapest price from all showtimes
                 num cheapestPrice = double.maxFinite;
                 for (var showtime in showtimes) {
                   final seats =
@@ -1924,7 +1750,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                   }
                 }
 
-                // Calculate maximum availability percentage from all showtimes
                 int maxAvailability = 0;
                 for (var showtime in showtimes) {
                   final availableSeats =

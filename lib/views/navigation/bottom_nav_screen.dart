@@ -1,6 +1,5 @@
 import 'package:cinematick/views/cinema/cinema_screen.dart';
 import 'package:cinematick/views/cinema/cinema_locations_screen.dart';
-import 'package:cinematick/views/cinema/cinema_showtimes_screen.dart';
 import 'package:cinematick/views/tick/tick_screen.dart';
 import 'package:cinematick/providers/navigation_providers.dart';
 import 'package:flutter/material.dart';
@@ -90,18 +89,6 @@ class BottomNavScreen extends ConsumerWidget {
           ref.read(selectedMovieTitleProvider.notifier).state = null;
         },
         tmdbId: '',
-      );
-    } else if (selectedLocation != null) {
-      return CinemaShowtimesScreen(
-        locationName: selectedLocation.name,
-        locationAddress: selectedLocation.address,
-        cinemaId: selectedLocation.cinemaId,
-        onMovieSelected: (title) {
-          ref.read(selectedMovieTitleProvider.notifier).state = title;
-        },
-        onBackPressed: () {
-          ref.read(selectedCinemaLocationProvider.notifier).state = null;
-        },
       );
     } else if (selectedChain != null) {
       return CinemaLocationsScreen(

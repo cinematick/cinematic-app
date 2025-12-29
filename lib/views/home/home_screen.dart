@@ -81,10 +81,10 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
 
   Widget _buildSearchOverlay() {
     return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+      top: 0.0,
+      left: 0.0,
+      right: 0.0,
+      bottom: 0.0,
       child: Stack(
         children: [
           GestureDetector(
@@ -98,9 +98,9 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
             child: Container(color: Colors.black.withOpacity(0.3)),
           ),
           Positioned(
-            top: 140,
-            left: 16,
-            right: 16,
+            top: 140.0,
+            left: 16.0,
+            right: 16.0,
             child: Container(
               constraints: const BoxConstraints(maxHeight: 450),
               decoration: BoxDecoration(
@@ -358,7 +358,6 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
           itemCount: HomeScreenController.langList.length + 2,
           itemBuilder: (context, i) {
             if (i == 0) {
-              // All chips button
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: GestureDetector(
@@ -369,7 +368,6 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
             }
 
             if (i == 1) {
-              // All languages chip
               final anySelected = _controller.langSelected.contains(true);
               final allSelected =
                   !anySelected && _controller.selectedLangIndex == -1;

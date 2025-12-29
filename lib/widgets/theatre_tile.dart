@@ -127,53 +127,109 @@ class TheatreTile extends StatelessWidget {
               child: Row(
                 children:
                     (theatre['shows'] as List<dynamic>).map<Widget>((s) {
+                      final isHighlight = s['highlight'] == true;
                       return Padding(
-                        padding: const EdgeInsets.only(right: 11),
+                        padding: const EdgeInsets.only(right: 12),
                         child: Container(
+                          width: 90,
                           padding: EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 8,
+                            horizontal: 12,
+                            vertical: 12,
                           ),
                           decoration: BoxDecoration(
                             color:
-                                s['highlight'] == true
+                                isHighlight
                                     ? const Color.fromARGB(
                                       255,
-                                      23,
-                                      142,
-                                      239,
-                                    ).withOpacity(0.25)
-                                    : Colors.white.withOpacity(0.08),
+                                      100,
+                                      60,
+                                      160,
+                                    ).withOpacity(0.7)
+                                    : const Color.fromARGB(
+                                      255,
+                                      80,
+                                      50,
+                                      140,
+                                    ).withOpacity(0.6),
                             borderRadius: BorderRadius.circular(14),
-                            border:
-                                s['highlight'] == true
-                                    ? Border.all(
-                                      color: const Color.fromARGB(
+                            border: Border.all(
+                              color:
+                                  isHighlight
+                                      ? const Color.fromARGB(
                                         255,
-                                        23,
-                                        142,
-                                        239,
-                                      ).withOpacity(0.6),
-                                      width: 1.8,
-                                    )
-                                    : null,
+                                        255,
+                                        190,
+                                        50,
+                                      ).withOpacity(0.6)
+                                      : Colors.white.withOpacity(0.12),
+                              width: isHighlight ? 1.5 : 1,
+                            ),
                           ),
                           child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Text(
-                                s['time'] as String,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15,
-                                ),
+                              Stack(
+                                alignment: Alignment.topRight,
+                                children: [
+                                  Text(
+                                    s['time'] as String,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                      height: 1.0,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  if (isHighlight)
+                                    Positioned(
+                                      right: -10,
+                                      top: -10,
+                                      child: Icon(
+                                        Icons.star,
+                                        color: const Color.fromARGB(
+                                          255,
+                                          255,
+                                          190,
+                                          50,
+                                        ),
+                                        size: 22,
+                                      ),
+                                    ),
+                                ],
                               ),
-                              Text(
-                                "\$${s['price']}",
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 13,
-                                ),
+                              const SizedBox(height: 8),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    s['format'] ?? '2D',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.85),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    "\$${s['price']}",
+                                    style: TextStyle(
+                                      color:
+                                          isHighlight
+                                              ? const Color.fromARGB(
+                                                255,
+                                                255,
+                                                190,
+                                                50,
+                                              )
+                                              : Colors.white.withOpacity(0.9),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),

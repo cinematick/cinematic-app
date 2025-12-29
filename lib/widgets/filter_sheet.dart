@@ -21,7 +21,6 @@ class FilterSheetWidget extends StatefulWidget {
 }
 
 class _FilterSheetWidgetState extends State<FilterSheetWidget> {
-  // NEW: custom chip with gradient support
   Widget _buildGradientChip({
     required String label,
     required bool selected,
@@ -54,7 +53,6 @@ class _FilterSheetWidgetState extends State<FilterSheetWidget> {
       color: Colors.transparent,
       borderRadius: const BorderRadius.only(topRight: Radius.circular(24)),
       child: BackdropFilter(
-        // NEW: blur effect
         filter: ui.ImageFilter.blur(sigmaX: 8.0, sigmaY: 8.0),
         child: Container(
           height: double.infinity,
@@ -66,7 +64,6 @@ class _FilterSheetWidgetState extends State<FilterSheetWidget> {
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              // CHANGED: more transparent gradient to show blur
               colors: [
                 const Color(0xFF191B2E).withOpacity(0.85),
 

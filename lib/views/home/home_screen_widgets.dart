@@ -83,7 +83,7 @@ class HomeScreenWidgets {
         color: selected ? AppColors.chipSelectedBg : AppColors.chipUnselectedBg,
       ),
       child: Text(
-        label,
+        label[0].toUpperCase() + label.substring(1),
         maxLines: 1,
         softWrap: false,
         overflow: TextOverflow.fade,
@@ -100,7 +100,11 @@ class HomeScreenWidgets {
     );
   }
 
-  static Widget sectionHeader(String title, IconData icon, {VoidCallback? onButtonPressed}) {
+  static Widget sectionHeader(
+    String title,
+    IconData icon, {
+    VoidCallback? onButtonPressed,
+  }) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = constraints.maxWidth;
@@ -139,7 +143,10 @@ class HomeScreenWidgets {
               GestureDetector(
                 onTap: onButtonPressed,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.accentOrange,
                     borderRadius: BorderRadius.circular(18),
@@ -405,7 +412,6 @@ class HomeScreenWidgets {
 
       String formattedUrl = url.trim();
 
-      // If URL doesn't start with http, add https://
       if (!formattedUrl.startsWith('http://') &&
           !formattedUrl.startsWith('https://')) {
         formattedUrl = 'https://$formattedUrl';
@@ -413,11 +419,9 @@ class HomeScreenWidgets {
 
       print('Launching YouTube URL: $formattedUrl');
 
-      // Extract video ID from YouTube URL
       String? videoId = _extractYoutubeVideoId(formattedUrl);
 
       if (videoId != null) {
-        // Try YouTube app first with youtube:// scheme
         final youtubeAppUri = Uri.parse(
           'youtube://www.youtube.com/watch?v=$videoId',
         );
@@ -436,7 +440,6 @@ class HomeScreenWidgets {
         }
       }
 
-      // Fallback to browser
       final Uri webUri = Uri.parse(formattedUrl);
 
       if (await canLaunchUrl(webUri)) {
@@ -444,7 +447,6 @@ class HomeScreenWidgets {
         print('Browser opened successfully');
       } else {
         print('Cannot launch URL: $formattedUrl');
-        // Try with default mode
         try {
           await launchUrl(webUri);
           print('URL opened with default mode');
@@ -459,12 +461,10 @@ class HomeScreenWidgets {
 
   static String? _extractYoutubeVideoId(String url) {
     try {
-      // Handle youtube.com/watch?v=ID
       if (url.contains('watch?v=')) {
         final uri = Uri.parse(url);
         return uri.queryParameters['v'];
       }
-      // Handle youtu.be/ID
       if (url.contains('youtu.be/')) {
         final parts = url.split('youtu.be/');
         if (parts.length > 1) {
@@ -570,32 +570,27 @@ class HomeScreenWidgets {
       builder: (context, constraints) {
         final screenWidth = constraints.maxWidth;
 
-        // Responsive column count
         int crossAxisCount;
         double childAspectRatio;
         double mainAxisSpacing;
         double crossAxisSpacing;
 
         if (screenWidth > 1200) {
-          // Large tablets/desktops
           crossAxisCount = 4;
           childAspectRatio = 0.68;
           mainAxisSpacing = 18;
           crossAxisSpacing = 16;
         } else if (screenWidth > 800) {
-          // Tablets
           crossAxisCount = 3;
           childAspectRatio = 0.67;
           mainAxisSpacing = 16;
           crossAxisSpacing = 14;
         } else if (screenWidth > 480) {
-          // Large phones
           crossAxisCount = 2;
           childAspectRatio = 0.66;
           mainAxisSpacing = 16;
           crossAxisSpacing = 14;
         } else {
-          // Small phones
           crossAxisCount = 2;
           childAspectRatio = 0.62;
           mainAxisSpacing = 12;

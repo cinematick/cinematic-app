@@ -97,7 +97,7 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
                   )
                   : null,
           contentPadding: const EdgeInsets.symmetric(
-            vertical: 12,
+            vertical: 10,
             horizontal: 8,
           ),
         ),

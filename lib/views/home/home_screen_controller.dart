@@ -93,7 +93,6 @@ class HomeScreenController {
     try {
       trendingMovies = await _apiService.fetchMovies();
       upcomingMovies = await _apiService.fetchUpcomingMovies();
-      // Mark upcoming movies with 'Upcoming' status for filtering
       for (var movie in upcomingMovies) {
         movie['status'] = 'Upcoming';
       }
@@ -116,7 +115,7 @@ class HomeScreenController {
     sorted.sort((a, b) {
       final ratingA = double.tryParse((a['rating'] ?? '0').toString()) ?? 0;
       final ratingB = double.tryParse((b['rating'] ?? '0').toString()) ?? 0;
-      return ratingB.compareTo(ratingA); // Higher rating first
+      return ratingB.compareTo(ratingA);
     });
     return sorted;
   }
@@ -131,21 +130,17 @@ class HomeScreenController {
       _filterService.sortAndLimitTrendingMovies(filteredTrendingMovies, 10);
 
   void toggleChip(int index) {
-    // If currently showing all languages (selectedLangIndex == -1),
-    // clicking a chip should select only that language
     if (selectedLangIndex == -1) {
       selectedLangIndex = index;
       for (int i = 0; i < langSelected.length; i++) {
         langSelected[i] = (i == index);
       }
     } else if (selectedLangIndex == index) {
-      // Deselect current language, show all
       selectedLangIndex = -1;
       for (int i = 0; i < langSelected.length; i++) {
         langSelected[i] = false;
       }
     } else {
-      // Switch to different language
       selectedLangIndex = index;
       for (int i = 0; i < langSelected.length; i++) {
         langSelected[i] = (i == index);
@@ -163,7 +158,6 @@ class HomeScreenController {
 
   void setTabIndex(int index) {
     if (tabIndex == index) {
-      // If clicking the same tab, deselect it and show default screen
       tabIndex = -1;
     } else {
       tabIndex = index;

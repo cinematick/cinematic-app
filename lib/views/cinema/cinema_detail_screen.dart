@@ -1,3 +1,4 @@
+import 'package:cinematick/config/secrets.dart';
 import 'package:cinematick/widgets/app_colors.dart';
 import 'package:cinematick/widgets/custom_app_bar.dart';
 import 'package:cinematick/widgets/custom_bottom_nav.dart';
@@ -13,7 +14,6 @@ import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:math';
-import 'package:cinematick/views/show_time_screen.dart';
 
 class CinemaDetailScreen extends ConsumerStatefulWidget {
   final Map<String, String>? movie;
@@ -54,7 +54,10 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
   Position? _userPosition;
   Map<String, double> _cinemaDistances = {};
   List<String> _availableLanguages = [];
-  String _searchQuery = '';
+  String _movieSearchQuery = '';
+  String _genreSearchQuery = '';
+  late TextEditingController _movieSearchController;
+  late TextEditingController _genreSearchController;
 
   final List<String> _allExperiences = ['2D', '3D', 'IMAX', 'Dolby'];
   final List<String> _allGenres = [
@@ -70,7 +73,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
   List<bool> _xpSelected = [];
   List<bool> _genreSelected = [];
 
-  // City coordinates map for Australian locations (latitude, longitude)
   final Map<String, Map<String, double>> _cityCoordinates = {
     'sydney': {'lat': -33.8688, 'lng': 151.2093},
     'glendale': {'lat': -33.5061, 'lng': 151.4278},
@@ -110,21 +112,25 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _movieSearchController = TextEditingController();
+    _genreSearchController = TextEditingController();
     print('TMDB ID: ${widget.tmdbId}');
     _xpSelected = List<bool>.filled(_allExperiences.length, false);
     _genreSelected = List<bool>.filled(_allGenres.length, false);
+    _generatedDates = _generateDates();
     _getUserLocation();
     _fetchShowtimes();
   }
 
   @override
   void dispose() {
+    _movieSearchController.dispose();
+    _genreSearchController.dispose();
     super.dispose();
   }
 
   Future<void> _getUserLocation() async {
     try {
-      // First, check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         print('Location services are disabled.');
@@ -142,11 +148,9 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
         return;
       }
 
-      // Check current permission status
       LocationPermission permission = await Geolocator.checkPermission();
       print('Current permission status: $permission');
 
-      // If permission is denied or not determined, request it
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.unableToDetermine) {
         print('Requesting location permission from user...');
@@ -154,7 +158,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
         print('User response to permission request: $permission');
       }
 
-      // Handle different permission responses
       if (permission == LocationPermission.denied) {
         print('User denied location permission.');
         if (mounted) {
@@ -186,7 +189,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
         return;
       }
 
-      // Permission granted, get the position
       if (!mounted) return;
       print('Permission granted. Getting user position...');
       final position = await Geolocator.getCurrentPosition(
@@ -197,7 +199,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
       if (mounted) {
         setState(() {
           _userPosition = position;
-          // Recalculate distances now that we have the user position
           _calculateCinemaDistances();
         });
         print(
@@ -283,16 +284,30 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
 
   Future<void> _fetchShowtimes() async {
     try {
+      String dateStr;
+      if (_generatedDates.isNotEmpty &&
+          selectedDateIndex < _generatedDates.length) {
+        dateStr = _generatedDates[selectedDateIndex]['dateStr'];
+      } else {
+        final now = DateTime.now();
+        dateStr =
+            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      }
+
       if (widget.cinemaId != null && widget.cinemaId!.isNotEmpty) {
-        print('Fetching showtimes for Cinema ID: ${widget.cinemaId}');
+        print(
+          'Fetching showtimes for Cinema ID: ${widget.cinemaId}, Date: $dateStr',
+        );
         final response = await http.get(
-          Uri.parse('baseUrl/cinemas/${widget.cinemaId}'),
+          Uri.parse('$baseUrl/cinemas/${widget.cinemaId}?date=$dateStr'),
         );
         _processShowtimesFromCinemaAPI(response);
       } else {
-        print('Fetching showtimes for TMDB ID: ${widget.tmdbId}');
+        print(
+          'Fetching showtimes for TMDB ID: ${widget.tmdbId}, Date: $dateStr',
+        );
         final response = await http.get(
-          Uri.parse('baseUrl/movies/${widget.tmdbId}/showtimes'),
+          Uri.parse('$baseUrl/movies/${widget.tmdbId}/showtimes?date=$dateStr'),
         );
         _processShowtimesFromMovieAPI(response);
       }
@@ -487,7 +502,7 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
     for (int i = 0; i < 6; i++) {
       final date = now.add(Duration(days: i));
       final dayName =
-          ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][(date.weekday % 7)];
+          ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(date.weekday % 7)];
       final monthName =
           [
             'Jan',
@@ -631,6 +646,7 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                     setState(() {
                       selectedDateIndex = index;
                     });
+                    _fetchShowtimes();
                   },
                   langList: _availableLanguages,
                   selectedLangIndex: selectedLangIndex,
@@ -651,12 +667,20 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                   },
                   cinemaCity: widget.cinemaCity,
                   screenCount: widget.screenCount,
-                  searchQuery: _searchQuery,
-                  onSearchChanged: (query) {
+                  movieSearchQuery: _movieSearchQuery,
+                  genreSearchQuery: _genreSearchQuery,
+                  onMovieSearchChanged: (query) {
                     setState(() {
-                      _searchQuery = query;
+                      _movieSearchQuery = query;
                     });
                   },
+                  onGenreSearchChanged: (query) {
+                    setState(() {
+                      _genreSearchQuery = query;
+                    });
+                  },
+                  movieSearchController: _movieSearchController,
+                  genreSearchController: _genreSearchController,
                 ),
               ),
               if (_isLoading)
@@ -725,7 +749,7 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       if (_generatedDates.isEmpty) {
-                        return const Center(
+                        return Center(
                           child: Padding(
                             padding: EdgeInsets.all(32.0),
                             child: Text(
@@ -808,13 +832,36 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                         }
                       }
 
-                      if (_searchQuery.isNotEmpty) {
+                      if (_movieSearchQuery.isNotEmpty ||
+                          _genreSearchQuery.isNotEmpty) {
                         theatreMovieList =
                             theatreMovieList.where((item) {
                               final movieTitle =
                                   (item['movie_title'] as String).toLowerCase();
-                              final searchLower = _searchQuery.toLowerCase();
-                              return movieTitle.contains(searchLower);
+                              final movieSearchLower =
+                                  _movieSearchQuery.toLowerCase();
+                              final genreSearchLower =
+                                  _genreSearchQuery.toLowerCase();
+
+                              bool movieMatch =
+                                  _movieSearchQuery.isEmpty ||
+                                  movieTitle.contains(movieSearchLower);
+                              bool genreMatch = _genreSearchQuery.isEmpty;
+
+                              if (_genreSearchQuery.isNotEmpty) {
+                                final showtimes =
+                                    item['showtimes']
+                                        as List<Map<String, dynamic>>;
+                                genreMatch = showtimes.any((showtime) {
+                                  final screenName =
+                                      (showtime['screen_name'] as String?)
+                                          ?.toLowerCase() ??
+                                      '';
+                                  return screenName.contains(genreSearchLower);
+                                });
+                              }
+
+                              return movieMatch && genreMatch;
                             }).toList();
                       }
 
@@ -882,27 +929,9 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                           theatreMovieList[index]['showtimes'];
                       final firstShowtime = theatreShowtimes.first;
                       final cinema = firstShowtime['cinema'];
-                      final movieId =
-                          firstShowtime['movie_id']?.toString() ??
-                          widget.tmdbId;
 
                       return GestureDetector(
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder:
-                                  (context) => ShowTimeScreen(
-                                    movie: widget.movie,
-                                    tmdbId: movieId,
-                                    backdropPath: widget.backdropPath,
-                                    selectedDateIndex: selectedDateIndex,
-                                    selectedLanguageIndex: selectedLangIndex,
-                                    movieTitle: movieTitle,
-                                    cinema: cinema,
-                                  ),
-                            ),
-                          );
-                        },
+                        onTap: () {},
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -1052,10 +1081,15 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                                                           ),
                                                     ),
                                                     child: Text(
-                                                      firstShowtime['language']
-                                                              ?.toString()
-                                                              .toUpperCase() ??
-                                                          'ENGLISH',
+                                                      (() {
+                                                        final lang =
+                                                            (firstShowtime['language'] ??
+                                                                    'english')
+                                                                .toString();
+                                                        return lang[0]
+                                                                .toUpperCase() +
+                                                            lang.substring(1);
+                                                      })(),
                                                       style: const TextStyle(
                                                         color: Colors.white,
                                                         fontSize: 10,
@@ -1145,7 +1179,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                                                 mainAxisAlignment:
                                                     MainAxisAlignment.center,
                                                 children: [
-                                                  // Time
                                                   Text(
                                                     _formatTime(
                                                       showtime['start_time'],
@@ -1387,8 +1420,12 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
   final Function(int) onInfoIndexChanged;
   final String? cinemaCity;
   final int? screenCount;
-  final String searchQuery;
-  final Function(String) onSearchChanged;
+  final String movieSearchQuery;
+  final Function(String) onMovieSearchChanged;
+  final String genreSearchQuery;
+  final Function(String) onGenreSearchChanged;
+  final TextEditingController movieSearchController;
+  final TextEditingController genreSearchController;
 
   _StickyHeaderDelegate({
     required this.title,
@@ -1405,8 +1442,12 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.onInfoIndexChanged,
     this.cinemaCity,
     this.screenCount,
-    required this.searchQuery,
-    required this.onSearchChanged,
+    required this.movieSearchQuery,
+    required this.onMovieSearchChanged,
+    required this.genreSearchQuery,
+    required this.onGenreSearchChanged,
+    required this.movieSearchController,
+    required this.genreSearchController,
   });
 
   @override
@@ -1488,47 +1529,121 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
           ),
 
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: TextField(
-              onChanged: onSearchChanged,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Search movies...',
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: Colors.white.withOpacity(0.7),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: movieSearchController,
+                    onChanged: onMovieSearchChanged,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Search movies...',
+                      hintStyle: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                      ),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: Colors.white.withOpacity(0.7),
+                      ),
+                      suffixIcon:
+                          movieSearchQuery.isNotEmpty
+                              ? GestureDetector(
+                                onTap: () {
+                                  movieSearchController.clear();
+                                  onMovieSearchChanged('');
+                                },
+                                child: Icon(
+                                  Icons.close,
+                                  color: Colors.white.withOpacity(0.7),
+                                ),
+                              )
+                              : null,
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.08),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.1),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.1),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                    ),
+                    cursorColor: Colors.white,
+                  ),
                 ),
-                suffixIcon:
-                    searchQuery.isNotEmpty
-                        ? GestureDetector(
-                          onTap: () => onSearchChanged(''),
-                          child: Icon(
-                            Icons.close,
-                            color: Colors.white.withOpacity(0.7),
-                          ),
-                        )
-                        : null,
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.08),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: genreSearchController,
+                    onChanged: onGenreSearchChanged,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Search genres...',
+                      hintStyle: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                      ),
+                      prefixIcon: Icon(
+                        Icons.category,
+                        color: Colors.white.withOpacity(0.7),
+                      ),
+                      suffixIcon:
+                          genreSearchQuery.isNotEmpty
+                              ? GestureDetector(
+                                onTap: () {
+                                  genreSearchController.clear();
+                                  onGenreSearchChanged('');
+                                },
+                                child: Icon(
+                                  Icons.close,
+                                  color: Colors.white.withOpacity(0.7),
+                                ),
+                              )
+                              : null,
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.08),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.1),
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.1),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.3),
+                        ),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                    ),
+                    cursorColor: Colors.white,
+                  ),
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-              ),
-              cursorColor: Colors.white,
+              ],
             ),
           ),
           const SizedBox(height: 8),
@@ -1671,7 +1786,8 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                                   : AppColors.chipUnselectedBg,
                         ),
                         child: Text(
-                          langList[langIdx],
+                          langList[langIdx][0].toUpperCase() +
+                              langList[langIdx].substring(1),
                           style: TextStyle(
                             color:
                                 selected
@@ -1749,6 +1865,7 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
         oldDelegate.showtimes != showtimes ||
         oldDelegate.cinemaCity != cinemaCity ||
         oldDelegate.screenCount != screenCount ||
-        oldDelegate.searchQuery != searchQuery;
+        oldDelegate.movieSearchQuery != movieSearchQuery ||
+        oldDelegate.genreSearchQuery != genreSearchQuery;
   }
 }

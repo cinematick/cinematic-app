@@ -1,4 +1,3 @@
-import 'package:cinematick/config/secrets.dart';
 import 'package:cinematick/widgets/app_colors.dart';
 import 'package:cinematick/widgets/custom_app_bar.dart';
 import 'package:cinematick/providers/cinema_providers.dart';

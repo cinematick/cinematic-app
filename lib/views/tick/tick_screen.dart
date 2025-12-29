@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:math' as math;
 import 'package:cinematick/views/show_time_screen.dart';
+import 'package:cinematick/config/secrets.dart';
 
 class TickScreen extends ConsumerStatefulWidget {
   final Map<String, String>? movie;
@@ -64,6 +65,7 @@ class _TickScreenState extends ConsumerState<TickScreen> {
     super.initState();
     _xpSelected = List<bool>.filled(_allExperiences.length, false);
     _genreSelected = List<bool>.filled(_allGenres.length, false);
+    _generatedDates = _generateDates();
     _getUserLocation();
     _fetchMovies();
   }
@@ -117,8 +119,17 @@ class _TickScreenState extends ConsumerState<TickScreen> {
 
   Future<void> _fetchMovies() async {
     try {
-      print('Fetching showtimes from /v1/tick endpoint');
-      final response = await http.get(Uri.parse('baseUrl/tick'));
+      String dateStr;
+      if (_generatedDates.isNotEmpty) {
+        dateStr = _generatedDates[selectedDateIndex]['dateStr'];
+      } else {
+        final now = DateTime.now();
+        dateStr =
+            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      }
+
+      print('Fetching showtimes from /v1/tick endpoint for date: $dateStr');
+      final response = await http.get(Uri.parse('$baseUrl/tick?date=$dateStr'));
 
       print('API Response Status: ${response.statusCode}');
 
@@ -133,6 +144,7 @@ class _TickScreenState extends ConsumerState<TickScreen> {
             _movies = [];
             _availableLanguages = [];
             _langSelected = [];
+            selectedLangIndex = -1; 
             _generatedDates = _generateDates();
             _isLoading = false;
             _errorMessage = 'No movies available';
@@ -144,9 +156,15 @@ class _TickScreenState extends ConsumerState<TickScreen> {
           _movies = List<Map<String, dynamic>>.from(data);
           _availableLanguages = _extractAvailableLanguages();
           _langSelected = List<bool>.filled(_availableLanguages.length, false);
-          _generatedDates = _generateDates();
+          selectedLangIndex =
+              -1;
+          _errorMessage = null; 
           print('Loaded ${_movies.length} movies');
           print('Available languages: $_availableLanguages');
+          if (_movies.isNotEmpty) {
+            print('First movie keys: ${_movies[0].keys.toList()}');
+            print('First movie data: ${_movies[0]}');
+          }
           _isLoading = false;
         });
       } else {
@@ -173,7 +191,7 @@ class _TickScreenState extends ConsumerState<TickScreen> {
     for (int i = 0; i < 6; i++) {
       final date = now.add(Duration(days: i));
       final dayName =
-          ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][(date.weekday % 7)];
+          ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(date.weekday % 7)];
       final monthName =
           [
             'Jan',
@@ -272,6 +290,7 @@ class _TickScreenState extends ConsumerState<TickScreen> {
                     setState(() {
                       selectedDateIndex = index;
                     });
+                    _fetchMovies();
                   },
                   langList: _availableLanguages,
                   selectedLangIndex: selectedLangIndex,
@@ -381,7 +400,6 @@ class _TickScreenState extends ConsumerState<TickScreen> {
                               ? null
                               : _availableLanguages[selectedLangIndex];
 
-                      // Filter and search
                       List<Map<String, dynamic>> filtered =
                           _movies.where((movie) {
                             if (selectedLanguage != null) {
@@ -406,9 +424,7 @@ class _TickScreenState extends ConsumerState<TickScreen> {
                             return true;
                           }).toList();
 
-                      // Sort based on selected info index
                       if (selectedInfoIndex == 0) {
-                        // Sort by cheapest price (ascending)
                         filtered.sort((a, b) {
                           final priceA =
                               (a['minPrice'] as num?)?.toDouble() ??
@@ -419,14 +435,12 @@ class _TickScreenState extends ConsumerState<TickScreen> {
                           return priceA.compareTo(priceB);
                         });
                       } else if (selectedInfoIndex == 1) {
-                        // Sort by availability (descending)
                         filtered.sort((a, b) {
                           final availA = _getMaxAvailability(a);
                           final availB = _getMaxAvailability(b);
                           return availB.compareTo(availA);
                         });
                       } else if (selectedInfoIndex == 2) {
-                        // Sort by nearest distance
                         if (_userPosition != null) {
                           filtered.sort((a, b) {
                             final cinemaLatA =
@@ -455,7 +469,6 @@ class _TickScreenState extends ConsumerState<TickScreen> {
                           });
                         }
                       } else {
-                        // Default: sort by rating (descending)
                         filtered.sort((a, b) {
                           final ratingA = (a['rating'] as num?) ?? 0;
                           final ratingB = (b['rating'] as num?) ?? 0;
@@ -504,19 +517,7 @@ class _TickScreenState extends ConsumerState<TickScreen> {
                           vertical: 8,
                         ),
                         child: GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder:
-                                    (context) => ShowTimeScreen(
-                                      tmdbId: movieId,
-                                      movieTitle: title,
-                                      backdropPath: '',
-                                    ),
-                              ),
-                            );
-                          },
+                          onTap: () {},
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child: Container(
@@ -535,7 +536,6 @@ class _TickScreenState extends ConsumerState<TickScreen> {
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // Movie Poster
                                     ClipRRect(
                                       borderRadius: BorderRadius.circular(8),
                                       child: Container(
@@ -571,7 +571,6 @@ class _TickScreenState extends ConsumerState<TickScreen> {
                                     ),
                                     const SizedBox(width: 12),
 
-                                    // Info
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
@@ -632,7 +631,6 @@ class _TickScreenState extends ConsumerState<TickScreen> {
                                           ),
                                           const SizedBox(height: 6),
 
-                                          // Cinema Name
                                           Text(
                                             cinemaName,
                                             maxLines: 1,
@@ -645,7 +643,6 @@ class _TickScreenState extends ConsumerState<TickScreen> {
                                           ),
                                           const SizedBox(height: 8),
 
-                                          // Showtimes
                                           if (showtimes.isNotEmpty)
                                             SizedBox(
                                               height: 55,
@@ -829,19 +826,11 @@ class _TickScreenState extends ConsumerState<TickScreen> {
   }
 
   int _getMaxAvailability(Map<String, dynamic> movie) {
-    int maxAvailability = 0;
-    const int totalSeats = 100;
-    final showtimes =
-        (movie['showtimes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    for (var showtime in showtimes) {
-      final availableSeats = (showtime['seatsAvailable'] as num?)?.toInt() ?? 0;
-      final availabilityPercentage =
-          ((availableSeats / totalSeats) * 100).toInt();
-      if (availabilityPercentage > maxAvailability) {
-        maxAvailability = availabilityPercentage;
-      }
-    }
-    return maxAvailability;
+    final totalSeats = (movie['rawTotalSeats'] as num?)?.toInt() ?? 1;
+    final availableSeats = (movie['rawAvailableSeats'] as num?)?.toInt() ?? 0;
+    final availabilityPercentage =
+        ((availableSeats / totalSeats) * 100).toInt();
+    return availabilityPercentage;
   }
 
   bool _hasGenreFilter() {
@@ -915,7 +904,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
         children: [
           const SizedBox(height: 12),
 
-          // Search Bar
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: TextField(
@@ -962,7 +950,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
           ),
           const SizedBox(height: 8),
 
-          // Date Picker
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: SizedBox(
@@ -1042,7 +1029,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
             ),
           ),
 
-          // Language Filter
           Padding(
             padding: const EdgeInsets.only(bottom: 8, left: 12),
             child: SizedBox(
@@ -1103,7 +1089,8 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                                   : AppColors.chipUnselectedBg,
                         ),
                         child: Text(
-                          langList[langIdx],
+                          langList[langIdx][0].toUpperCase() +
+                              langList[langIdx].substring(1),
                           style: TextStyle(
                             color:
                                 selected
@@ -1121,7 +1108,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
             ),
           ),
 
-          // Info Cards
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: Builder(
@@ -1129,12 +1115,9 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                 num cheapestPrice = double.maxFinite;
                 int maxAvailability = 0;
                 double nearestDistance = double.maxFinite;
-                const int totalSeats = 100;
 
-                // Get filtered movies based on language, search, experiences, and genres
                 final filteredMovies =
                     movies.where((movie) {
-                      // Language filter
                       if (selectedLangIndex != -1 &&
                           selectedLangIndex < langList.length) {
                         final language = movie['language'] as String? ?? '';
@@ -1145,7 +1128,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                         }
                       }
 
-                      // Search filter
                       if (searchQuery.isNotEmpty) {
                         final title =
                             (movie['movieTitle'] as String? ?? '')
@@ -1158,7 +1140,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                       return true;
                     }).toList();
 
-                // Calculate cheapest price, max availability, and nearest distance from filtered movies
                 for (var movie in filteredMovies) {
                   final minPrice =
                       (movie['minPrice'] as num?)?.toDouble() ??
@@ -1167,21 +1148,16 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                     cheapestPrice = minPrice;
                   }
 
-                  final showtimes =
-                      (movie['showtimes'] as List?)
-                          ?.cast<Map<String, dynamic>>() ??
-                      [];
-                  for (var showtime in showtimes) {
-                    final availableSeats =
-                        (showtime['seatsAvailable'] as num?)?.toInt() ?? 0;
-                    final availabilityPercentage =
-                        ((availableSeats / totalSeats) * 100).toInt();
-                    if (availabilityPercentage > maxAvailability) {
-                      maxAvailability = availabilityPercentage;
-                    }
+                  final totalSeats =
+                      (movie['rawTotalSeats'] as num?)?.toInt() ?? 1;
+                  final availableSeats =
+                      (movie['rawAvailableSeats'] as num?)?.toInt() ?? 0;
+                  final availabilityPercentage =
+                      ((availableSeats / totalSeats) * 100).toInt();
+                  if (availabilityPercentage > maxAvailability) {
+                    maxAvailability = availabilityPercentage;
                   }
 
-                  // Calculate distance if user location is available
                   if (userPosition != null) {
                     final cinemaLat =
                         (movie['latitude'] as num?)?.toDouble() ?? 0;

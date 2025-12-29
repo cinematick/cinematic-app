@@ -11,7 +11,6 @@ class ApiService {
 
   ApiService._internal();
 
-  // Cinema Chains
   Future<List<Map<String, dynamic>>> fetchCinemaChains() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/cinemas/chains'));
@@ -25,7 +24,6 @@ class ApiService {
     }
   }
 
-  // Cinema Locations
   Future<List<Map<String, dynamic>>> fetchCinemaLocations(
     String chainId,
   ) async {
@@ -43,7 +41,6 @@ class ApiService {
     }
   }
 
-  // Cinema Showtimes
   Future<Map<String, dynamic>> fetchCinemaShowtimes(String cinemaId) async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/cinemas/$cinemaId'));
@@ -56,7 +53,6 @@ class ApiService {
     }
   }
 
-  // Movie Showtimes (TMDB)
   Future<List<Map<String, dynamic>>> fetchMovieShowtimes(String tmdbId) async {
     try {
       final response = await http.get(
@@ -72,7 +68,6 @@ class ApiService {
     }
   }
 
-  // Fetch all movies (consolidates MovieService.fetchMovies logic)
   Future<List<Map<String, dynamic>>> fetchMovies() async {
     try {
       final response = await http
@@ -98,7 +93,6 @@ class ApiService {
     }
   }
 
-  // Fetch upcoming/coming soon movies
   Future<List<Map<String, dynamic>>> fetchUpcomingMovies() async {
     try {
       final response = await http
@@ -203,7 +197,6 @@ class ApiService {
             .toLowerCase()
             .trim();
 
-    // If rawLang is already a 2-letter code, return it
     if (rawLang.length == 2) {
       return rawLang;
     }
