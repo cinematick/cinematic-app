@@ -21,6 +21,11 @@ class FilterSheetWidget extends StatefulWidget {
 }
 
 class _FilterSheetWidgetState extends State<FilterSheetWidget> {
+  @override
+  void initState() {
+    super.initState();
+  }
+
   Widget _buildGradientChip({
     required String label,
     required bool selected,
@@ -38,7 +43,7 @@ class _FilterSheetWidgetState extends State<FilterSheetWidget> {
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : Colors.white70,
+            color: selected ? Colors.black : Colors.white70,
             fontWeight: FontWeight.bold,
             fontSize: 14,
           ),
@@ -66,7 +71,6 @@ class _FilterSheetWidgetState extends State<FilterSheetWidget> {
               end: Alignment.bottomCenter,
               colors: [
                 const Color(0xFF191B2E).withOpacity(0.85),
-
                 const Color(0xFF321167).withOpacity(0.65),
               ],
             ),
@@ -87,7 +91,11 @@ class _FilterSheetWidgetState extends State<FilterSheetWidget> {
                   ),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close, color: Colors.white70, size: 26),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white70,
+                      size: 26,
+                    ),
                   ),
                 ],
               ),
@@ -96,33 +104,41 @@ class _FilterSheetWidgetState extends State<FilterSheetWidget> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 25),
-                      const Text(
-                        "Languages",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 20,
+                      // Languages Section
+                      if (widget.allLanguages.isNotEmpty) ...[
+                        const SizedBox(height: 25),
+                        const Text(
+                          "Languages",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 15),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: List.generate(widget.allLanguages.length, (
-                          i,
-                        ) {
-                          final selected = widget.langSelected[i];
-                          return _buildGradientChip(
-                            label: widget.allLanguages[i],
-                            selected: selected,
-                            onSelected:
-                                () => setState(
-                                  () => widget.langSelected[i] = !selected,
-                                ),
-                          );
-                        }),
-                      ),
+                        const SizedBox(height: 15),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: List.generate(widget.allLanguages.length, (
+                            i,
+                          ) {
+                            final selected = widget.langSelected[i];
+                            final capitalizedLanguage =
+                                widget.allLanguages[i][0].toUpperCase() +
+                                widget.allLanguages[i].substring(1);
+                            return _buildGradientChip(
+                              label: capitalizedLanguage,
+                              selected: selected,
+                              onSelected: () {
+                                setState(() {
+                                  widget.langSelected[i] = !selected;
+                                });
+                              },
+                            );
+                          }),
+                        ),
+                      ],
+                      // Screen Experience Section
                       const SizedBox(height: 25),
                       const Text(
                         "Screen Experience",
@@ -150,31 +166,34 @@ class _FilterSheetWidgetState extends State<FilterSheetWidget> {
                           );
                         }),
                       ),
-                      const SizedBox(height: 25),
-                      const Text(
-                        "Genres",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 20,
+                      // Genres Section
+                      if (widget.allGenres.isNotEmpty) ...[
+                        const SizedBox(height: 25),
+                        const Text(
+                          "Genres",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 20,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: List.generate(widget.allGenres.length, (i) {
-                          final selected = widget.genreSelected[i];
-                          return _buildGradientChip(
-                            label: widget.allGenres[i],
-                            selected: selected,
-                            onSelected:
-                                () => setState(
-                                  () => widget.genreSelected[i] = !selected,
-                                ),
-                          );
-                        }),
-                      ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: List.generate(widget.allGenres.length, (i) {
+                            final selected = widget.genreSelected[i];
+                            return _buildGradientChip(
+                              label: widget.allGenres[i],
+                              selected: selected,
+                              onSelected:
+                                  () => setState(
+                                    () => widget.genreSelected[i] = !selected,
+                                  ),
+                            );
+                          }),
+                        ),
+                      ],
                       const SizedBox(height: 25),
                     ],
                   ),
@@ -189,7 +208,6 @@ class _FilterSheetWidgetState extends State<FilterSheetWidget> {
                       child: Container(
                         decoration: BoxDecoration(
                           gradient: AppColors.filterGradient,
-
                           borderRadius: BorderRadius.circular(10),
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 11),
@@ -214,7 +232,10 @@ class _FilterSheetWidgetState extends State<FilterSheetWidget> {
                     child: OutlinedButton(
                       onPressed: widget.onClear,
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.white54, width: 1.6),
+                        side: const BorderSide(
+                          color: Colors.white54,
+                          width: 1.6,
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),

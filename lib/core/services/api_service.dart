@@ -11,25 +11,30 @@ class ApiService {
 
   ApiService._internal();
 
-  Future<List<Map<String, dynamic>>> fetchCinemaChains() async {
+  Future<List<Map<String, dynamic>>> fetchCinemaChains({
+    required String region,
+  }) async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/cinemas/chains'));
+      final response = await http.get(
+        Uri.parse('$baseUrl/cinemas/chains?region=$region'),
+      );
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
         return List<Map<String, dynamic>>.from(data);
       }
       throw Exception('Failed to load cinema chains');
     } catch (e) {
-      throw Exception('Error fetching cinema chains: $e');
+      throw Exception('Error fetching cinema chains');
     }
   }
 
   Future<List<Map<String, dynamic>>> fetchCinemaLocations(
-    String chainId,
-  ) async {
+    String chainId, {
+    required String region,
+  }) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/cinemas?chain_id=$chainId'),
+        Uri.parse('$baseUrl/cinemas?chain_id=$chainId&region=$region'),
       );
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -37,26 +42,34 @@ class ApiService {
       }
       throw Exception('Failed to load cinema locations');
     } catch (e) {
-      throw Exception('Error fetching cinema locations: $e');
+      throw Exception('Error fetching cinema locations');
     }
   }
 
-  Future<Map<String, dynamic>> fetchCinemaShowtimes(String cinemaId) async {
+  Future<Map<String, dynamic>> fetchCinemaShowtimes(
+    String cinemaId, {
+    required String region,
+  }) async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/cinemas/$cinemaId'));
+      final response = await http.get(
+        Uri.parse('$baseUrl/cinemas/$cinemaId?region=$region'),
+      );
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
       throw Exception('Failed to load showtimes');
     } catch (e) {
-      throw Exception('Error fetching showtimes: $e');
+      throw Exception('Error fetching showtimes');
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchMovieShowtimes(String tmdbId) async {
+  Future<List<Map<String, dynamic>>> fetchMovieShowtimes(
+    String tmdbId, {
+    required String region,
+  }) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/movies/$tmdbId/showtimes'),
+        Uri.parse('$baseUrl/movies/$tmdbId/showtimes?region=$region'),
       );
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -64,17 +77,21 @@ class ApiService {
       }
       throw Exception('Failed to load movie showtimes');
     } catch (e) {
-      throw Exception('Error fetching movie showtimes: $e');
+      throw Exception('Error fetching movie showtimes');
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchMovies() async {
+  Future<List<Map<String, dynamic>>> fetchMovies({
+    required String region,
+    String? language,
+  }) async {
     try {
+      String url = '$baseUrl/movies/region/list?region=$region';
+      if (language != null && language.isNotEmpty) {
+        url += '&language=$language';
+      }
       final response = await http
-          .get(
-            Uri.parse('$baseUrl/movies'),
-            headers: {'Content-Type': 'application/json'},
-          )
+          .get(Uri.parse(url), headers: {'Content-Type': 'application/json'})
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -87,19 +104,23 @@ class ApiService {
           return <String, dynamic>{};
         }).toList();
       }
-      throw Exception('Failed to load movies: ${response.statusCode}');
+      throw Exception('Failed to load movies');
     } catch (e) {
-      throw Exception('Failed to load movies: $e');
+      throw Exception('Failed to load movies');
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchUpcomingMovies() async {
+  Future<List<Map<String, dynamic>>> fetchUpcomingMovies({
+    required String region,
+    String? language,
+  }) async {
     try {
+      String url = '$baseUrl/movies/upcoming?region=$region';
+      if (language != null && language.isNotEmpty) {
+        url += '&language=$language';
+      }
       final response = await http
-          .get(
-            Uri.parse('$baseUrl/movies/upcoming'),
-            headers: {'Content-Type': 'application/json'},
-          )
+          .get(Uri.parse(url), headers: {'Content-Type': 'application/json'})
           .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -112,9 +133,9 @@ class ApiService {
           return <String, dynamic>{};
         }).toList();
       }
-      throw Exception('Failed to load upcoming movies: ${response.statusCode}');
+      throw Exception('Failed to load upcoming movies');
     } catch (e) {
-      throw Exception('Failed to load upcoming movies: $e');
+      throw Exception('Failed to load upcoming movies');
     }
   }
 
@@ -133,9 +154,13 @@ class ApiService {
     return <String, dynamic>{
       'title': movie['title'] ?? movie['name'] ?? 'Unknown',
       'tmdbId': movie['tmdb_id'] ?? movie['tmdbId'] ?? '',
-      'backdropPath': movie['backdropPath'] ?? movie['backdrop_path'] ?? '',
-      'posterPath': movie['posterPath'] ?? movie['poster_path'] ?? '',
-      'image': movie['image'] ?? movie['poster_path'] ?? '',
+      'backdropPath': _cleanImageUrl(
+        movie['backdropPath'] ?? movie['backdrop_path'] ?? '',
+      ),
+      'posterPath': _cleanImageUrl(
+        movie['posterPath'] ?? movie['poster_path'] ?? '',
+      ),
+      'image': _cleanImageUrl(movie['image'] ?? movie['poster_path'] ?? ''),
       'rating': (movie['voteAverage'] ?? movie['vote_average'] ?? 0).toString(),
       'year': _extractYear(
         movie['releaseDate'] ?? movie['release_date'] ?? movie['year'] ?? '',
@@ -208,5 +233,28 @@ class ApiService {
     if (dateOrYear == null) return '';
     final str = dateOrYear.toString();
     return str.length >= 4 ? str.substring(0, 4) : str;
+  }
+
+  String _cleanImageUrl(String url) {
+    if (url.isEmpty) return '';
+
+    const baseUrl1 = 'https://image.tmdb.org/t/p/original';
+    const baseUrl2 = 'https://image.tmdb.org/t/p/w500';
+
+    if (url.contains('$baseUrl1$baseUrl1') ||
+        url.contains('$baseUrl1$baseUrl2')) {
+      return url
+          .replaceFirst('$baseUrl1$baseUrl1', baseUrl1)
+          .replaceFirst('$baseUrl1$baseUrl2', '$baseUrl2');
+    }
+
+    if (url.contains('$baseUrl2$baseUrl1') ||
+        url.contains('$baseUrl2$baseUrl2')) {
+      return url
+          .replaceFirst('$baseUrl2$baseUrl1', '$baseUrl1')
+          .replaceFirst('$baseUrl2$baseUrl2', baseUrl2);
+    }
+
+    return url;
   }
 }

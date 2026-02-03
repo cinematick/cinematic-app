@@ -27,24 +27,37 @@ class MovieFilterService {
     'ja',
     'it',
     'zh',
+    'fr',
+    'de',
+    'es',
+    'no',
+    'ro',
+    'vi',
   };
 
   List<Map<String, dynamic>> filterMovies(
     List<Map<String, dynamic>> movies,
     List<bool> langSelected,
     List<bool> genreSelected,
-    String status,
-  ) {
-    return filterMoviesByStatus(movies, langSelected, genreSelected, [status]);
+    String status, {
+    List<String>? langList,
+  }) {
+    return filterMoviesByStatus(movies, langSelected, genreSelected, [
+      status,
+    ], langList: langList);
   }
 
   List<Map<String, dynamic>> filterMoviesByStatus(
     List<Map<String, dynamic>> movies,
     List<bool> langSelected,
     List<bool> genreSelected,
-    List<String> statuses,
-  ) {
-    final activeLangCodes = _getActiveLangCodes(langSelected);
+    List<String> statuses, {
+    List<String>? langList,
+  }) {
+    final activeLangCodes = _getActiveLangCodes(
+      langSelected,
+      langList: langList,
+    );
     final activeGenres = _getActiveGenres(genreSelected);
     final statusesLower = statuses.map((s) => s.toLowerCase()).toSet();
 
@@ -54,12 +67,9 @@ class MovieFilterService {
       if (!statusesLower.contains(movieStatus)) return false;
 
       if (activeLangCodes.isNotEmpty) {
-        final langCode =
-            (movie['langCode'] ?? movie['language'] ?? 'en')
-                .toString()
-                .toLowerCase()
-                .trim();
-        if (!activeLangCodes.contains(langCode)) return false;
+        if (!_matchesLanguages(movie['language'] ?? [], activeLangCodes)) {
+          return false;
+        }
       }
 
       if (activeGenres.isNotEmpty) {
@@ -68,6 +78,57 @@ class MovieFilterService {
 
       return true;
     }).toList();
+  }
+
+  bool _matchesLanguages(dynamic rawLanguages, Set<String> activeLangCodes) {
+    final langTokens = _languageTokens(rawLanguages);
+    return langTokens.any((lang) => activeLangCodes.contains(lang));
+  }
+
+  Iterable<String> _languageTokens(dynamic raw) sync* {
+    if (raw == null) return;
+    if (raw is List) {
+      for (final e in raw) {
+        final s = (e ?? '').toString().toLowerCase().trim();
+        if (s.isNotEmpty) {
+          // Map language name to code
+          final code = _languageNameToCode(s);
+          if (code.isNotEmpty) yield code;
+        }
+      }
+      return;
+    }
+    final s = raw.toString().toLowerCase().trim();
+    if (s.isEmpty) return;
+    final code = _languageNameToCode(s);
+    if (code.isNotEmpty) yield code;
+  }
+
+  String _languageNameToCode(String langName) {
+    final normalized = langName.toLowerCase().trim();
+
+    // Map common language names to codes
+    const Map<String, String> langNameToCode = {
+      'english': 'en',
+      'hindi': 'hi',
+      'telugu': 'te',
+      'tamil': 'ta',
+      'kannada': 'kn',
+      'malayalam': 'ml',
+      'punjabi': 'pa',
+      'korean': 'ko',
+      'italian': 'it',
+      'mandarin': 'zh',
+      
+    };
+
+    // Check if it's already a code
+    if (supportedLangCodes.contains(normalized)) {
+      return normalized;
+    }
+
+    // Try to map from language name
+    return langNameToCode[normalized] ?? normalized;
   }
 
   List<Map<String, dynamic>> sortAndLimitTrendingMovies(
@@ -88,13 +149,16 @@ class MovieFilterService {
     return sorted.length > limit ? sorted.sublist(0, limit) : sorted;
   }
 
-  Set<String> _getActiveLangCodes(List<bool> langSelected) {
+  Set<String> _getActiveLangCodes(
+    List<bool> langSelected, {
+    List<String>? langList,
+  }) {
     final codes = <String>{};
-    final allLanguages = langCodeMap.keys.toList();
+    final allLanguages = langList ?? langCodeMap.keys.toList();
     for (int i = 0; i < langSelected.length && i < allLanguages.length; i++) {
       if (langSelected[i]) {
-        final code = langCodeMap[allLanguages[i]];
-        if (code != null) codes.add(code.toLowerCase());
+        final code = _languageNameToCode(allLanguages[i]);
+        if (code.isNotEmpty) codes.add(code.toLowerCase());
       }
     }
     return codes;

@@ -5,15 +5,19 @@ import 'package:cinematick/providers/navigation_providers.dart';
 import 'package:cinematick/config/secrets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'dart:ui' as ui;
 import 'package:cinematick/widgets/filter_sheet.dart';
 import 'package:cinematick/widgets/info_row_card.dart';
-import 'package:cinematick/widgets/theatre_tile.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:math';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:cinematick/providers/timezone_provider.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:intl/intl.dart' as intl;
+import 'package:cinematick/providers/timezone_provider.dart'
+    show regionTimezoneMap;
 
 class ShowTimeScreen extends ConsumerStatefulWidget {
   final Map<String, String>? movie;
@@ -24,6 +28,7 @@ class ShowTimeScreen extends ConsumerStatefulWidget {
   final int? selectedLanguageIndex;
   final String? movieTitle;
   final Map<String, dynamic>? cinema;
+  final String location;
 
   const ShowTimeScreen({
     super.key,
@@ -35,6 +40,7 @@ class ShowTimeScreen extends ConsumerStatefulWidget {
     this.selectedLanguageIndex,
     this.movieTitle,
     this.cinema,
+    this.location = 'NSW',
   });
   @override
   ConsumerState<ShowTimeScreen> createState() => _ShowTimeScreenState();
@@ -92,6 +98,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     'bondi junction': {'lat': -33.8844, 'lng': 151.2485},
     'castle hill': {'lat': -33.7367, 'lng': 150.9857},
     'macquarie': {'lat': -33.7793, 'lng': 151.1268},
+    'macquarie park': {'lat': -33.7793, 'lng': 151.1268},
     'liverpool': {'lat': -34.0106, 'lng': 150.9217},
     'shellharbour': {'lat': -34.5747, 'lng': 150.7643},
     'westfield': {'lat': -33.7976, 'lng': 151.1861},
@@ -101,8 +108,20 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     'warringah mall': {'lat': -33.7503, 'lng': 151.2875},
     'broadway': {'lat': -33.8896, 'lng': 151.1988},
     'mt druitt': {'lat': -33.7711, 'lng': 150.8194},
+    'mount druitt': {'lat': -33.7711, 'lng': 150.8194},
     'hurstville': {'lat': -34.0038, 'lng': 151.1050},
     'warrawong': {'lat': -34.4281, 'lng': 150.8025},
+    'blacktown': {'lat': -33.7714, 'lng': 150.8995},
+    'maitland': {'lat': -32.7394, 'lng': 151.5447},
+    'east maitland': {'lat': -32.7456, 'lng': 151.5756},
+    'brookvale': {'lat': -33.7474, 'lng': 151.3049},
+    'rouse hill': {'lat': -33.6703, 'lng': 150.9939},
+    'dubbo': {'lat': -32.2533, 'lng': 148.6061},
+    'erina': {'lat': -33.4494, 'lng': 151.4269},
+    'bankstown': {'lat': -33.9215, 'lng': 150.9996},
+    'cronulla': {'lat': -34.0501, 'lng': 151.1561},
+    'tweed heads': {'lat': -28.1689, 'lng': 153.5339},
+    'moore park': {'lat': -33.8958, 'lng': 151.2190},
   };
 
   @override
@@ -110,14 +129,19 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     super.initState();
     print('TMDB ID: ${widget.tmdbId}');
 
-    selectedDateIndex = widget.selectedDateIndex ?? 0;
-    selectedLangIndex = widget.selectedLanguageIndex ?? -1;
+    selectedDateIndex = 0; // Start with today
+    selectedLangIndex = -1; // All languages
 
     _xpSelected = List<bool>.filled(_allExperiences.length, false);
     _genreSelected = List<bool>.filled(_allGenres.length, false);
     _generatedDates = _generateDates();
     _getUserLocation();
-    _fetchShowtimes();
+
+    // Fetch data for today by default
+    if (_generatedDates.isNotEmpty) {
+      final todayDateStr = _generatedDates[0]['dateStr'];
+      _fetchShowtimesForDate(todayDateStr);
+    }
   }
 
   @override
@@ -203,7 +227,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
         );
       }
     } catch (e) {
-      print('Error getting user location: $e');
+      print('Error getting user location');
       if (mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
@@ -279,23 +303,75 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     return degrees * (pi / 180.0);
   }
 
-  Future<void> _fetchShowtimes() async {
+  /// Calculates the UTC date to fetch from API for a given local date and region
+  /// For Jan 30 Sydney (UTC+11): Midnight END of Jan 30 local = Feb 1 UTC (next day)
+  /// The API expects the UTC date for the END of the local date (next day midnight in UTC)
+  String _calculateApiDateForRegion(String localDateStr, String region) {
     try {
-      String dateStr;
-      if (_generatedDates.isNotEmpty &&
-          selectedDateIndex < _generatedDates.length) {
-        dateStr = _generatedDates[selectedDateIndex]['dateStr'];
-      } else {
-        final now = DateTime.now();
-        dateStr =
-            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      }
+      // Parse local date (e.g., "2026-01-30")
+      final parts = localDateStr.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final day = int.parse(parts[2]);
 
-      final String apiUrl =
-          '$baseUrl/movies/${widget.tmdbId}/showtimes?date=$dateStr';
-      print('Fetching from Movie API: $apiUrl');
+      // Get timezone location for the region
+      final tzName = regionTimezoneMap[region] ?? 'Australia/Sydney';
+      final location = tz.getLocation(tzName);
 
-      final response = await http.get(Uri.parse(apiUrl));
+      // Create midnight at the END of the local date (next day at midnight)
+      final nextDay = DateTime(year, month, day).add(const Duration(days: 1));
+      final midnightLocal = tz.TZDateTime(
+        location,
+        nextDay.year,
+        nextDay.month,
+        nextDay.day,
+        0,
+        0,
+        0,
+      );
+
+      // Convert to UTC
+      final utcTime = midnightLocal.toUtc();
+
+      // Return the UTC date that should be sent to the API
+      final apiDate =
+          '${utcTime.year}-${utcTime.month.toString().padLeft(2, '0')}-${utcTime.day.toString().padLeft(2, '0')}';
+
+      print(
+        'API_DATE_CALC: LocalDate=$localDateStr, Region=$region => APIDate=$apiDate',
+      );
+
+      return apiDate;
+    } catch (e) {
+      print('Error calculating API date: $e');
+      return localDateStr; // Fallback to local date if error
+    }
+  }
+
+  Future<void> _fetchShowtimesForDate(
+    String dateStr, {
+    bool isAutoAdvance = false,
+  }) async {
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final region = ref.read(selectedRegionProvider);
+      final apiDate = _calculateApiDateForRegion(dateStr, region);
+
+      print('📍 Fetching: Local=$dateStr, API=$apiDate, Region=$region');
+
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/movies/${widget.tmdbId}/showtimes?date=$apiDate&region=$region',
+        ),
+      );
+
+      print('📡 Response Status: ${response.statusCode}');
 
       if (!mounted) return;
 
@@ -304,39 +380,121 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
         List<Map<String, dynamic>> processedShowtimes = [];
 
         if (data is List) {
-          print('Processing Movie API response with ${data.length} showtimes');
+          // Handle List response
           processedShowtimes = List<Map<String, dynamic>>.from(data);
+          print('✅ API returned ${processedShowtimes.length} showtimes');
+        } else if (data is Map) {
+          // Handle Map response - cast safely
+          final dataMap = data as Map<String, dynamic>;
+          final movies = dataMap['movies'] as List? ?? [];
+          final showtimes = dataMap['showtimes'] as List? ?? [];
+          final dataList = dataMap['data'] as List? ?? [];
+
+          // Check for nested showtimes structure
+          if (movies.isNotEmpty) {
+            final hasNestedShowtimes =
+                movies.isNotEmpty &&
+                (movies.first as Map).containsKey('showtimes');
+
+            if (hasNestedShowtimes) {
+              processedShowtimes = _processShowtimesFromCinemaAPI(dataMap);
+            } else {
+              processedShowtimes = List<Map<String, dynamic>>.from(movies);
+            }
+          } else if (showtimes.isNotEmpty) {
+            processedShowtimes = List<Map<String, dynamic>>.from(showtimes);
+          } else if (dataList.isNotEmpty) {
+            processedShowtimes = List<Map<String, dynamic>>.from(dataList);
+          }
+          print('✅ API returned ${processedShowtimes.length} showtimes');
+        }
+
+        // Group showtimes by date for display
+        final groupedByDate = _groupShowtimesByDate(processedShowtimes);
+        print('🗓️ Showtimes grouped by dates: ${groupedByDate.keys.toList()}');
+        print('📊 Total showtimes: ${processedShowtimes.length}');
+
+        // If no showtimes and this is the initial load, try next date
+        if (processedShowtimes.isEmpty &&
+            !isAutoAdvance &&
+            selectedDateIndex < _generatedDates.length - 1) {
+          print('⚠️ No showtimes for $dateStr, trying next date...');
+          setState(() {
+            // Remove today's date and keep selectedDateIndex at 0 (now pointing to tomorrow)
+            _generatedDates.removeAt(0);
+            selectedDateIndex = 0;
+
+            // Add a 7th date to maintain 6 available dates
+            final lastDate =
+                _generatedDates.isNotEmpty
+                    ? DateTime.parse(_generatedDates.last['dateStr'] as String)
+                    : DateTime.now();
+            final newDate = lastDate.add(const Duration(days: 1));
+            final dayName =
+                [
+                  'Sun',
+                  'Mon',
+                  'Tue',
+                  'Wed',
+                  'Thu',
+                  'Fri',
+                  'Sat',
+                ][(newDate.weekday % 7)];
+            final monthName =
+                [
+                  'Jan',
+                  'Feb',
+                  'Mar',
+                  'Apr',
+                  'May',
+                  'Jun',
+                  'Jul',
+                  'Aug',
+                  'Sep',
+                  'Oct',
+                  'Nov',
+                  'Dec',
+                ][newDate.month - 1];
+            _generatedDates.add({
+              'label': dayName,
+              'num': newDate.day.toString(),
+              'month': monthName,
+              'dateStr':
+                  '${newDate.year}-${newDate.month.toString().padLeft(2, '0')}-${newDate.day.toString().padLeft(2, '0')}',
+            });
+          });
+          final nextDateStr = _generatedDates[selectedDateIndex]['dateStr'];
+          await _fetchShowtimesForDate(nextDateStr, isAutoAdvance: true);
+          return;
         }
 
         setState(() {
+          // Display all fetched showtimes
           _showtimes = processedShowtimes;
           _availableLanguages = _extractAvailableLanguages();
           _langSelected = List<bool>.filled(_availableLanguages.length, false);
           _calculateCinemaDistances();
-          print(
-            'Loaded ${_showtimes.length} total showtimes with ${_generatedDates.length} unique dates',
-          );
-          print('Available languages: $_availableLanguages');
-          for (var date in _generatedDates) {
-            print(
-              'Date: ${date['label']} ${date['num']} ${date['month']} (${date['dateStr']})',
-            );
+
+          if (_showtimes.isEmpty) {
+            print('⚠️ No showtimes returned from API for $dateStr');
+          } else {
+            print('✅ Displaying ${_showtimes.length} showtimes for $dateStr');
           }
           _isLoading = false;
         });
       } else {
         if (!mounted) return;
         setState(() {
-          _errorMessage =
-              'Failed to load showtimes (Status: ${response.statusCode})';
+          _errorMessage = 'Failed to load showtimes (${response.statusCode})';
           _isLoading = false;
         });
+        print('❌ API Error: ${response.statusCode}');
       }
     } catch (e) {
       if (!mounted) return;
-      print('Error in _fetchShowtimes: $e');
+      print('❌ Exception fetching showtimes: $e');
       setState(() {
-        _errorMessage = 'Error: $e';
+        _errorMessage = 'Error fetching showtimes';
         _isLoading = false;
       });
     }
@@ -421,62 +579,46 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     print('Calculated distances for $distancesCalculated cinemas');
   }
 
-  Future<void> _fetchShowtimesForDate(String dateStr) async {
-    try {
-      print('Fetching showtimes for date: $dateStr');
-      final response = await http.get(
-        Uri.parse('$baseUrl/movies/${widget.tmdbId}/showtimes?date=$dateStr'),
-      );
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        final allShowtimes = List<Map<String, dynamic>>.from(data);
-
-        if (!mounted) return;
-        setState(() {
-          _showtimes = allShowtimes;
-          print('Total showtimes for $dateStr: ${allShowtimes.length}');
-        });
-      } else {
-        print('Failed to load showtimes: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('Error fetching showtimes for date: $e');
-    }
-  }
-
-  Map<String, List<Map<String, dynamic>>> _groupShowtimesByTheater() {
-    Map<String, List<Map<String, dynamic>>> grouped = {};
-    for (var showtime in _showtimes) {
-      String theaterName = showtime['cinema']['name'] ?? 'Unknown';
-      if (!grouped.containsKey(theaterName)) {
-        grouped[theaterName] = [];
-      }
-      grouped[theaterName]!.add(showtime);
-    }
-    return grouped;
-  }
-
   Map<String, List<Map<String, dynamic>>> _groupShowtimesByDate(
     List<Map<String, dynamic>> showtimes,
   ) {
+    final location = ref.read(timezonLocationProvider);
     Map<String, List<Map<String, dynamic>>> grouped = {};
+
     for (var showtime in showtimes) {
       final startTimeStr = showtime['start_time']?.toString() ?? '';
-      String dateStr =
-          startTimeStr.length >= 10
-              ? startTimeStr.substring(0, 10)
-              : startTimeStr;
+      if (startTimeStr.isEmpty) continue;
 
-      if (dateStr.isNotEmpty) {
+      try {
+        DateTime utcTime = DateTime.parse(startTimeStr);
+        if (!startTimeStr.contains('Z')) {
+          utcTime = utcTime.toUtc();
+        }
+
+        final localTime = tz.TZDateTime.from(utcTime, location);
+        final dateStr =
+            '${localTime.year}-${localTime.month.toString().padLeft(2, '0')}-${localTime.day.toString().padLeft(2, '0')}';
+
         if (!grouped.containsKey(dateStr)) {
           grouped[dateStr] = [];
         }
         grouped[dateStr]!.add(showtime);
+      } catch (e) {
+        // Fallback: try simple substring extraction
+        final fallbackDateStr =
+            startTimeStr.length >= 10
+                ? startTimeStr.substring(0, 10)
+                : startTimeStr;
+        if (fallbackDateStr.isNotEmpty) {
+          if (!grouped.containsKey(fallbackDateStr)) {
+            grouped[fallbackDateStr] = [];
+          }
+          grouped[fallbackDateStr]!.add(showtime);
+        }
       }
     }
+
+    print('🗓️ GROUPED DATES: ${grouped.keys.toList()}');
     return grouped;
   }
 
@@ -576,6 +718,14 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Listen for region changes and navigate to home screen
+    ref.listen(selectedRegionProvider, (previous, next) {
+      if (previous != null && previous != next) {
+        print('Region changed from $previous to $next, navigating to home...');
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    });
+
     final mv = widget.movie;
 
     String bannerImage = 'https://picsum.photos/800/500?blur=3'; // default
@@ -586,9 +736,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
       bannerImage = mv!['backdrop'] as String;
     } else if (mv?['image']?.isNotEmpty == true) {
       bannerImage = mv!['image'] as String;
-    } else if (_showtimes.isNotEmpty) {
-      final firstShowtime = _showtimes.first;
-    }
+    } else if (_showtimes.isNotEmpty) {}
 
     final title = mv?['title'] ?? widget.movieTitle ?? 'Unknown Movie';
     final rating = mv?['rating'] ?? '0.0';
@@ -779,11 +927,22 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                         generatedDates: _generatedDates,
                         selectedDateIndex: selectedDateIndex,
                         onDateSelected: (index) {
-                          setState(() => selectedDateIndex = index);
                           if (index < _generatedDates.length) {
-                            _fetchShowtimesForDate(
-                              _generatedDates[index]['dateStr'],
+                            final selectedDateStr =
+                                _generatedDates[index]['dateStr'];
+                            print(
+                              'DATE SELECTED: index=$index, dateStr=$selectedDateStr',
                             );
+
+                            // Update index and show loading state
+                            setState(() {
+                              selectedDateIndex = index;
+                              _isLoading = true;
+                              _errorMessage = null;
+                            });
+
+                            // Fetch the data for the selected date
+                            _fetchShowtimesForDate(selectedDateStr);
                           }
                         },
                         langList: _availableLanguages,
@@ -798,6 +957,8 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                         onInfoIndexChanged: (index) {
                           setState(() => selectedInfoIndex = index);
                         },
+                        isShowtimePassed: _isShowtimePassed,
+                        groupShowtimesByDate: _groupShowtimesByDate,
                       ),
                     ),
                     if (_isLoading)
@@ -835,7 +996,9 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                       )
                     else
                       SliverList(
-                        key: ValueKey(selectedDateIndex),
+                        key: ValueKey(
+                          '$selectedDateIndex-${_showtimes.length}',
+                        ),
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
                             if (_generatedDates.isEmpty) {
@@ -850,18 +1013,19 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                               );
                             }
 
+                            final groupedByDate = _groupShowtimesByDate(
+                              _showtimes,
+                            );
+
+                            // Get showtimes for selected date
                             final safeIndex =
                                 selectedDateIndex >= _generatedDates.length
                                     ? 0
                                     : selectedDateIndex;
-                            final selectedDate =
+                            final selectedDateStr =
                                 _generatedDates[safeIndex]['dateStr'];
-
-                            final groupedByDate = _groupShowtimesByDate(
-                              _showtimes,
-                            );
-                            final showtimesForDate =
-                                groupedByDate[selectedDate] ?? [];
+                            var showtimesForDate =
+                                groupedByDate[selectedDateStr] ?? [];
 
                             final selectedLanguage =
                                 selectedLangIndex == -1 ||
@@ -869,8 +1033,18 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                             _availableLanguages.length
                                     ? null
                                     : _availableLanguages[selectedLangIndex];
+
                             final filteredShowtimes =
                                 showtimesForDate.where((showtime) {
+                                  // Filter out past showtimes
+                                  final startTimeStr =
+                                      showtime['start_time']?.toString() ?? '';
+                                  if (startTimeStr.isNotEmpty) {
+                                    if (_isShowtimePassed(startTimeStr)) {
+                                      return false;
+                                    }
+                                  }
+
                                   if (selectedLanguage != null) {
                                     final language = showtime['language'] ?? '';
                                     if (!language
@@ -945,7 +1119,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                       ),
                                       const SizedBox(height: 16),
                                       Text(
-                                        'No showtimes in $selectedLanguage on ${_generatedDates[safeIndex]['label']} ${_generatedDates[safeIndex]['num']}',
+                                        'No showtimes available',
                                         style: const TextStyle(
                                           color: Colors.white70,
                                           fontSize: 14,
@@ -961,11 +1135,36 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                               return const SizedBox.shrink();
                             }
 
-                            final theatreName = sortedTheatres[index].key;
                             final theatreShowtimes =
                                 sortedTheatres[index].value;
-                            final firstShowtime = theatreShowtimes.first;
-                            final cinema = firstShowtime['cinema'];
+                            final theatreName = sortedTheatres[index].key;
+
+                            // Get cinema info from the first showtime if available
+                            Map<String, dynamic> cinema;
+                            if (theatreShowtimes.isNotEmpty) {
+                              cinema = theatreShowtimes.first['cinema'];
+                            } else {
+                              // If no showtimes, find cinema info from all showtimes
+                              cinema =
+                                  _showtimes.firstWhere(
+                                    (s) =>
+                                        (s['cinema']['name'] ?? 'Unknown') ==
+                                        theatreName,
+                                    orElse:
+                                        () => {
+                                          'cinema': {
+                                            'name': theatreName,
+                                            'city': 'Unknown',
+                                            'rating': '4.0',
+                                          },
+                                        },
+                                  )['cinema'] ??
+                                  {
+                                    'name': theatreName,
+                                    'city': 'Unknown',
+                                    'rating': '4.0',
+                                  };
+                            }
                             final minPrice = _getMinPrice(theatreShowtimes);
 
                             final screenWidth =
@@ -1007,7 +1206,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                       ),
                                     ),
                                     child: Padding(
-                                      padding: const EdgeInsets.all(12),
+                                      padding: const EdgeInsets.all(10),
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
@@ -1018,28 +1217,19 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                                 borderRadius:
                                                     BorderRadius.circular(6),
                                                 child: Container(
-                                                  width: 67,
-                                                  height: 100,
+                                                  width: 50,
+                                                  height: 75,
                                                   color: Colors.black,
-                                                  child: Image.asset(
+                                                  child: SvgPicture.asset(
                                                     _getCinemaLogoPath(
-                                                      cinema['name'] ??
-                                                          'Unknown',
+                                                      theatreShowtimes
+                                                              .isNotEmpty
+                                                          ? theatreShowtimes
+                                                                  .first['chain_name'] ??
+                                                              ''
+                                                          : '',
                                                     ),
                                                     fit: BoxFit.contain,
-                                                    errorBuilder: (
-                                                      context,
-                                                      error,
-                                                      stackTrace,
-                                                    ) {
-                                                      return const Center(
-                                                        child: Icon(
-                                                          Icons.local_movies,
-                                                          color: Colors.white30,
-                                                          size: 40,
-                                                        ),
-                                                      );
-                                                    },
                                                   ),
                                                 ),
                                               ),
@@ -1134,165 +1324,185 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                               ),
                                             ],
                                           ),
-                                          const SizedBox(height: 14),
-                                          GridView.builder(
-                                            shrinkWrap: true,
-                                            physics:
-                                                const NeverScrollableScrollPhysics(),
-                                            gridDelegate:
-                                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                                  crossAxisCount: 3,
-                                                  crossAxisSpacing: 10,
-                                                  mainAxisSpacing: 10,
-                                                  childAspectRatio: 1.45,
-                                                ),
-                                            itemCount: theatreShowtimes.length,
-                                            itemBuilder: (context, idx) {
-                                              final showtime =
-                                                  theatreShowtimes[idx];
-                                              final seats =
-                                                  (showtime['seats'] as List?)
-                                                      ?.cast<
-                                                        Map<String, dynamic>
-                                                      >() ??
-                                                  [];
-                                              final minPrice =
-                                                  seats.isNotEmpty
-                                                      ? seats
-                                                          .map(
-                                                            (s) =>
-                                                                s['price']
-                                                                    as num,
-                                                          )
-                                                          .reduce(
-                                                            (a, b) =>
-                                                                a < b ? a : b,
-                                                          )
-                                                      : 0;
-
-                                              return GestureDetector(
-                                                onTap: () async {
-                                                  final bookingUrl =
-                                                      showtime['booking_url']
-                                                          as String? ??
-                                                      '';
-                                                  if (bookingUrl.isNotEmpty) {
-                                                    if (await canLaunchUrl(
-                                                      Uri.parse(bookingUrl),
-                                                    )) {
-                                                      await launchUrl(
-                                                        Uri.parse(bookingUrl),
-                                                        mode:
-                                                            LaunchMode
-                                                                .externalApplication,
-                                                      );
-                                                    }
-                                                  }
-                                                },
-                                                child: Container(
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white
-                                                        .withOpacity(0.1),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          8,
-                                                        ),
-                                                    border: Border.all(
-                                                      color: Colors.white
-                                                          .withOpacity(0.2),
-                                                      width: 1,
-                                                    ),
+                                          const SizedBox(height: 10),
+                                          if (theatreShowtimes.isEmpty)
+                                            const Center(
+                                              child: Padding(
+                                                padding: EdgeInsets.all(16.0),
+                                                child: Text(
+                                                  'No showtimes available',
+                                                  style: TextStyle(
+                                                    color: Colors.white70,
+                                                    fontSize: 12,
                                                   ),
-                                                  child: Padding(
-                                                    padding:
-                                                        const EdgeInsets.all(
-                                                          8.0,
-                                                        ),
-                                                    child: Column(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .center,
-                                                      children: [
-                                                        Text(
-                                                          _formatTime(
-                                                            showtime['start_time'],
+                                                ),
+                                              ),
+                                            )
+                                          else
+                                            GridView.builder(
+                                              shrinkWrap: true,
+                                              physics:
+                                                  const NeverScrollableScrollPhysics(),
+                                              gridDelegate:
+                                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                                    crossAxisCount: 4,
+                                                    crossAxisSpacing: 8,
+                                                    mainAxisSpacing: 8,
+                                                    childAspectRatio: 1.2,
+                                                  ),
+                                              itemCount:
+                                                  theatreShowtimes.length,
+                                              itemBuilder: (context, idx) {
+                                                final showtime =
+                                                    theatreShowtimes[idx];
+                                                final seats =
+                                                    (showtime['seats'] as List?)
+                                                        ?.cast<
+                                                          Map<String, dynamic>
+                                                        >() ??
+                                                    [];
+                                                final minPrice =
+                                                    seats.isNotEmpty
+                                                        ? seats
+                                                            .map(
+                                                              (s) =>
+                                                                  s['price']
+                                                                      as num,
+                                                            )
+                                                            .reduce(
+                                                              (a, b) =>
+                                                                  a < b ? a : b,
+                                                            )
+                                                        : 0;
+
+                                                return GestureDetector(
+                                                  onTap: () async {
+                                                    final bookingUrl =
+                                                        showtime['booking_url']
+                                                            as String? ??
+                                                        '';
+                                                    if (bookingUrl.isNotEmpty) {
+                                                      if (await canLaunchUrl(
+                                                        Uri.parse(bookingUrl),
+                                                      )) {
+                                                        await launchUrl(
+                                                          Uri.parse(bookingUrl),
+                                                          mode:
+                                                              LaunchMode
+                                                                  .externalApplication,
+                                                        );
+                                                      }
+                                                    }
+                                                  },
+                                                  child: Container(
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white
+                                                          .withOpacity(0.1),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
                                                           ),
-                                                          style:
-                                                              const TextStyle(
-                                                                color:
-                                                                    Colors
-                                                                        .white,
-                                                                fontSize: 20,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w900,
-                                                              ),
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 6,
-                                                        ),
-                                                        Row(
-                                                          mainAxisAlignment:
-                                                              MainAxisAlignment
-                                                                  .start,
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          children: [
-                                                            Flexible(
-                                                              child: Container(
-                                                                padding:
-                                                                    const EdgeInsets.symmetric(
-                                                                      horizontal:
-                                                                          2,
-                                                                      vertical:
-                                                                          2,
+                                                      border: Border.all(
+                                                        color: Colors.white
+                                                            .withOpacity(0.2),
+                                                        width: 1,
+                                                      ),
+                                                    ),
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                            4.0,
+                                                          ),
+                                                      child: Column(
+                                                        mainAxisAlignment:
+                                                            MainAxisAlignment
+                                                                .center,
+                                                        children: [
+                                                          Text(
+                                                            _formatTime(
+                                                              showtime['start_time'],
+                                                            ),
+                                                            style:
+                                                                const TextStyle(
+                                                                  color:
+                                                                      Colors
+                                                                          .white,
+                                                                  fontSize: 16,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w700,
+                                                                ),
+                                                          ),
+                                                          const SizedBox(
+                                                            height: 1,
+                                                          ),
+                                                          Row(
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .start,
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              Flexible(
+                                                                child: Container(
+                                                                  padding:
+                                                                      const EdgeInsets.symmetric(
+                                                                        horizontal:
+                                                                            2,
+                                                                      ),
+                                                                  child: Text(
+                                                                    showtime['screen_name'] ??
+                                                                        'Screen',
+                                                                    overflow:
+                                                                        TextOverflow
+                                                                            .ellipsis,
+                                                                    style: const TextStyle(
+                                                                      color:
+                                                                          Color.fromARGB(
+                                                                            255,
+                                                                            252,
+                                                                            252,
+                                                                            253,
+                                                                          ),
+                                                                      fontSize:
+                                                                          7,
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .w600,
                                                                     ),
-                                                                child: Text(
-                                                                  showtime['screen_name'] ??
-                                                                      'Screen',
-                                                                  overflow:
-                                                                      TextOverflow
-                                                                          .ellipsis,
-                                                                  style: const TextStyle(
-                                                                    color:
-                                                                        Color.fromARGB(
-                                                                          255,
-                                                                          252,
-                                                                          252,
-                                                                          253,
-                                                                        ),
-                                                                    fontSize: 9,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .w700,
                                                                   ),
                                                                 ),
                                                               ),
-                                                            ),
-                                                            const SizedBox(
-                                                              width: 10,
-                                                            ),
-                                                            Text(
-                                                              '\$$minPrice',
-                                                              style: const TextStyle(
-                                                                color:
-                                                                    Colors
-                                                                        .white,
-                                                                fontSize: 12,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w700,
+                                                              const SizedBox(
+                                                                width: 4,
                                                               ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ],
+                                                              Text(
+                                                                minPrice == 0
+                                                                    ? 'Sold'
+                                                                    : '\$$minPrice',
+                                                                style: const TextStyle(
+                                                                  color:
+                                                                      Colors
+                                                                          .white,
+                                                                  fontSize: 10,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                          const SizedBox(
+                                                            height: 6,
+                                                          ),
+                                                        ],
+                                                      ),
                                                     ),
                                                   ),
-                                                ),
-                                              );
-                                            },
-                                          ),
+                                                );
+                                              },
+                                            ),
                                         ],
                                       ),
                                     ),
@@ -1301,103 +1511,80 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                               ),
                             );
                           },
-                          childCount:
-                              _generatedDates.isEmpty
-                                  ? 0
-                                  : (() {
-                                    final safeIndex =
-                                        selectedDateIndex >=
-                                                _generatedDates.length
-                                            ? 0
-                                            : selectedDateIndex;
-                                    final selectedDate =
-                                        _generatedDates[safeIndex]['dateStr'];
-                                    final selectedLanguage =
-                                        selectedLangIndex == -1 ||
-                                                selectedLangIndex >=
-                                                    _availableLanguages.length
-                                            ? null
-                                            : _availableLanguages[selectedLangIndex];
+                          childCount: (() {
+                            if (_generatedDates.isEmpty) {
+                              return 0;
+                            }
 
-                                    final groupedByDate = _groupShowtimesByDate(
-                                      _showtimes,
-                                    );
-                                    final showtimesForDate =
-                                        groupedByDate[selectedDate] ?? [];
-                                    final filteredShowtimes =
-                                        showtimesForDate.where((showtime) {
-                                          if (selectedLanguage != null) {
-                                            final language =
-                                                showtime['language'] ?? '';
-                                            if (!language
-                                                .toString()
-                                                .toLowerCase()
-                                                .contains(
-                                                  selectedLanguage
-                                                      .toLowerCase(),
-                                                )) {
-                                              return false;
-                                            }
-                                          }
+                            final safeIndex =
+                                selectedDateIndex >= _generatedDates.length
+                                    ? 0
+                                    : selectedDateIndex;
+                            final selectedDate =
+                                _generatedDates[safeIndex]['dateStr'];
+                            final selectedLanguage =
+                                selectedLangIndex == -1 ||
+                                        selectedLangIndex >=
+                                            _availableLanguages.length
+                                    ? null
+                                    : _availableLanguages[selectedLangIndex];
 
-                                          if (selectedInfoIndex == 2) {
-                                            if (!_hasPremiumSeats(showtime)) {
-                                              return false;
-                                            }
-                                          }
+                            final groupedByDate = _groupShowtimesByDate(
+                              _showtimes,
+                            );
 
-                                          return true;
-                                        }).toList();
+                            // Get the specifically selected date (not searching forward)
+                            var showtimesForDate =
+                                groupedByDate[selectedDate] ?? [];
 
-                                    final groupedByTheatre =
-                                        <String, List<Map<String, dynamic>>>{};
-                                    for (var showtime in filteredShowtimes) {
-                                      final theatreName =
-                                          showtime['cinema']['name'] ??
-                                          'Unknown';
-                                      if (!groupedByTheatre.containsKey(
-                                        theatreName,
-                                      )) {
-                                        groupedByTheatre[theatreName] = [];
-                                      }
-                                      groupedByTheatre[theatreName]!.add(
-                                        showtime,
-                                      );
+                            final filteredShowtimes =
+                                showtimesForDate.where((showtime) {
+                                  // Filter out past showtimes
+                                  final startTimeStr =
+                                      showtime['start_time']?.toString() ?? '';
+                                  if (startTimeStr.isNotEmpty) {
+                                    if (_isShowtimePassed(startTimeStr)) {
+                                      return false;
                                     }
+                                  }
 
-                                    return groupedByTheatre.length;
-                                  }()),
+                                  if (selectedLanguage != null) {
+                                    final language = showtime['language'] ?? '';
+                                    if (!language
+                                        .toString()
+                                        .toLowerCase()
+                                        .contains(
+                                          selectedLanguage.toLowerCase(),
+                                        )) {
+                                      return false;
+                                    }
+                                  }
+
+                                  if (selectedInfoIndex == 2) {
+                                    if (!_hasPremiumSeats(showtime)) {
+                                      return false;
+                                    }
+                                  }
+
+                                  return true;
+                                }).toList();
+
+                            final groupedByTheatre =
+                                <String, List<Map<String, dynamic>>>{};
+                            for (var showtime in filteredShowtimes) {
+                              final theatreName =
+                                  showtime['cinema']['name'] ?? 'Unknown';
+                              if (!groupedByTheatre.containsKey(theatreName)) {
+                                groupedByTheatre[theatreName] = [];
+                              }
+                              groupedByTheatre[theatreName]!.add(showtime);
+                            }
+
+                            return groupedByTheatre.length;
+                          }()),
                         ),
                       ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 20)),
                   ],
-                ),
-              ),
-              Positioned(
-                left: 20,
-                top:
-                    _scrollOffset > 300
-                        ? (56 + MediaQuery.of(context).padding.top)
-                        : (-60),
-                child: GestureDetector(
-                  onTap: () => Navigator.of(context).pop(),
-                  child: AnimatedOpacity(
-                    opacity: _scrollOffset > 300 ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: const Icon(
-                        Icons.arrow_back,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ),
                 ),
               ),
             ],
@@ -1410,14 +1597,51 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
   String _formatTime(String dateTimeString) {
     try {
       if (dateTimeString.isEmpty) return 'N/A';
-      final dateTime = DateTime.parse(dateTimeString);
-      final hour = dateTime.hour.toString().padLeft(2, '0');
-      final minute = dateTime.minute.toString().padLeft(2, '0');
-      return '$hour:$minute';
+
+      // Parse the datetime - handle both UTC and local formats
+      DateTime dateTime = DateTime.parse(dateTimeString);
+
+      // Ensure it's UTC
+      if (!dateTimeString.contains('Z')) {
+        dateTime = dateTime.toUtc();
+      }
+
+      // Get the timezone location for selected region
+      final location = ref.read(timezonLocationProvider);
+
+      // Convert UTC time to region timezone
+      final regionTime = tz.TZDateTime.from(dateTime, location);
+
+      // Format the time
+      final formatter = intl.DateFormat('HH:mm');
+      final formattedTime = formatter.format(regionTime);
+
+      // DEBUG: Print conversion info
+      final region = ref.read(selectedRegionProvider);
+      print(
+        'TIME_CONVERSION: Input=$dateTimeString, Region=$region, '
+        'UTC=$dateTime, RegionTime=$regionTime, Display=$formattedTime',
+      );
+
+      return formattedTime;
     } catch (e) {
       print('Error formatting time: $e, dateTimeString: $dateTimeString');
       return 'N/A';
     }
+  }
+
+  DateTime _convertToRegionTime(DateTime utcTime, String region) {
+    // Ensure input is UTC
+    final utcDateTime = utcTime.isUtc ? utcTime : utcTime.toUtc();
+
+    // Get timezone location using the timezone library
+    final tzName = regionTimezoneMap[region] ?? 'Australia/Sydney';
+    final location = tz.getLocation(tzName);
+
+    // Convert UTC to region timezone
+    final regionTime = tz.TZDateTime.from(utcDateTime, location);
+
+    return regionTime;
   }
 
   num _getMinPrice(List<Map<String, dynamic>> showtimes) {
@@ -1454,37 +1678,99 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     return maxAvailability;
   }
 
+  bool _isShowtimePassed(String startTimeStr) {
+    try {
+      // Parse the showtime
+      DateTime showtime = DateTime.parse(startTimeStr);
+
+      // Handle UTC format
+      if (!startTimeStr.contains('Z')) {
+        showtime = showtime.toUtc();
+      }
+
+      // Get timezone location for selected region
+      final location = ref.read(timezonLocationProvider);
+      final region = ref.read(selectedRegionProvider);
+
+      // Get current time and convert to region timezone
+      final now = DateTime.now().toUtc();
+      final nowInRegion = tz.TZDateTime.from(now, location);
+      final showtimeInRegion = tz.TZDateTime.from(showtime, location);
+
+      // Compare times
+      final isPassed = showtimeInRegion.isBefore(nowInRegion);
+
+      if (isPassed) {
+        print(
+          'FILTERED_SHOWTIME: $startTimeStr (Region: $region) - '
+          'Showtime: $showtimeInRegion, Now: $nowInRegion',
+        );
+      }
+
+      return isPassed;
+    } catch (e) {
+      print('Error checking if showtime passed: $e');
+      return false;
+    }
+  }
+
   bool _hasPremiumSeats(Map<String, dynamic> showtime) {
+    // Check for premium seat types
     final seats =
         (showtime['seats'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    if (seats.isEmpty) return false;
-
-    for (var seat in seats) {
-      final seatType = (seat['type'] as String?)?.toLowerCase() ?? '';
-      if (seatType.contains('recliner') ||
-          seatType.contains('daybed') ||
-          seatType.contains('platinum') ||
-          seatType.contains('gold') ||
-          seatType.contains('vip')) {
-        return true;
+    if (seats.isNotEmpty) {
+      for (var seat in seats) {
+        final seatType = (seat['type'] as String?)?.toLowerCase() ?? '';
+        if (seatType.contains('recliner') ||
+            seatType.contains('daybed') ||
+            seatType.contains('platinum') ||
+            seatType.contains('gold') ||
+            seatType.contains('vip')) {
+          return true;
+        }
       }
     }
+
+    // Check for premium screen types
+    final screenName = (showtime['screen_name'] ?? '').toString().toLowerCase();
+    if (screenName.contains('recliner') ||
+        screenName.contains('boutique') ||
+        screenName.contains('4dx') ||
+        screenName.contains('3d') ||
+        screenName.contains('gold class')) {
+      return true;
+    }
+
     return false;
   }
 
-  String _getCinemaLogoPath(String cinemaName) {
-    final nameLower = cinemaName.toLowerCase();
+  String _getCinemaLogoPath(String chainName) {
+    final nameLower = chainName.toLowerCase().trim();
+    final normalized = nameLower.replaceAll(' ', '').replaceAll('-', '');
 
-    if (nameLower.contains('event')) {
-      return 'lib/assets/event.png';
-    } else if (nameLower.contains('hoyts')) {
-      return 'lib/assets/hoyts.png';
-    } else if (nameLower.contains('read')) {
-      return 'lib/assets/read.png';
-    } else if (nameLower.contains('village')) {
-      return 'lib/assets/village.png';
+    print('DEBUG_LOGO: chainName="$chainName", normalized="$normalized"');
+
+    if (normalized.contains('event')) {
+      print('DEBUG_LOGO: Matched EVENT');
+      return 'lib/assets/event.svg';
+    } else if (normalized.contains('hoyts')) {
+      print('DEBUG_LOGO: Matched HOYTS');
+      return 'lib/assets/hoytsau.svg';
+    } else if (normalized.contains('read')) {
+      print('DEBUG_LOGO: Matched READING');
+      return 'lib/assets/readingau.svg';
+    } else if (normalized.contains('village')) {
+      print('DEBUG_LOGO: Matched VILLAGE');
+      return 'lib/assets/village.svg';
+    } else if (normalized.contains('country')) {
+      print('DEBUG_LOGO: Matched COUNTRY');
+      return 'lib/assets/country.svg';
+    } else if (normalized.contains('palace')) {
+      print('DEBUG_LOGO: Matched PALACE');
+      return 'lib/assets/palace.svg';
     } else {
-      return 'lib/assets/village.png';
+      print('DEBUG_LOGO: NO MATCH - defaulting to VILLAGE');
+      return 'lib/assets/village.svg';
     }
   }
 }
@@ -1502,6 +1788,8 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
   final List<Map<String, dynamic>> showtimes;
   final int? selectedInfoIndex;
   final Function(int) onInfoIndexChanged;
+  final Function(String) isShowtimePassed;
+  final Function(List<Map<String, dynamic>>) groupShowtimesByDate;
 
   _StickyHeaderDelegate({
     required this.title,
@@ -1516,13 +1804,15 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.showtimes,
     this.selectedInfoIndex = 0,
     required this.onInfoIndexChanged,
+    required this.isShowtimePassed,
+    required this.groupShowtimesByDate,
   });
 
   @override
-  double get maxExtent => 380;
+  double get maxExtent => 245;
 
   @override
-  double get minExtent => 380;
+  double get minExtent => 245;
 
   @override
   Widget build(
@@ -1536,7 +1826,7 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1547,26 +1837,26 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
-                    fontSize: 28,
-                    letterSpacing: 0.5,
+                    fontSize: 24,
+                    letterSpacing: 1,
                     height: 1.2,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 Row(
                   children: [
                     const Icon(
                       Icons.star_outline,
                       color: Color(0xFFFFB64B),
-                      size: 18,
+                      size: 16,
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      '$rating/10',
+                      '${(rating is String ? double.tryParse(rating) ?? 0.0 : rating as num).toStringAsFixed(1)}/10',
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
-                        fontSize: 16,
+                        fontSize: 15,
                       ),
                     ),
                   ],
@@ -1575,9 +1865,9 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.only(bottom: 8),
             child: SizedBox(
-              height: 70,
+              height: 55,
               width: double.infinity,
               child:
                   generatedDates.isEmpty
@@ -1587,75 +1877,112 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                           style: TextStyle(color: Colors.white70),
                         ),
                       )
-                      : ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        itemCount: generatedDates.length,
-                        itemBuilder: (context, i) {
-                          final selected = i == selectedDateIndex;
-                          final dateData = generatedDates[i];
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              left: i == 0 ? 14 : 10,
-                              right: 0,
-                            ),
-                            child: GestureDetector(
-                              onTap: () => onDateSelected(i),
-                              child: Container(
-                                width: 70,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(14),
-                                  gradient:
-                                      selected
-                                          ? AppColors.filterGradient
-                                          : null,
-                                  color:
-                                      selected
-                                          ? null
-                                          : Colors.white.withOpacity(0.09),
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      dateData['label']!,
-                                      style: TextStyle(
-                                        color: Colors.white.withOpacity(0.90),
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      dateData['num']!,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      dateData['month']!,
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                      : Builder(
+                        builder: (context) {
+                        
+
+                          // Create a map of original index to display info
+                          final dateDisplayMap = <int, Map<String, dynamic>>{};
+
+                          for (int i = 0; i < generatedDates.length; i++) {
+                            // Show all 6 generated dates
+                            dateDisplayMap[i] = generatedDates[i];
+                          }
+
+                          if (dateDisplayMap.isEmpty) {
+                            return const Center(
+                              child: Text(
+                                'No dates available',
+                                style: TextStyle(color: Colors.white70),
                               ),
-                            ),
+                            );
+                          }
+
+                          return ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: dateDisplayMap.length,
+                            itemBuilder: (context, listIndex) {
+                              final originalIndex =
+                                  dateDisplayMap.keys.toList()[listIndex];
+                              final selected =
+                                  originalIndex == selectedDateIndex;
+                              final dateData = dateDisplayMap[originalIndex]!;
+
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  left: listIndex == 0 ? 12 : 8,
+                                  right: 0,
+                                ),
+                                child: GestureDetector(
+                                  onTap: () => onDateSelected(originalIndex),
+                                  child: Container(
+                                    width: 50,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      gradient:
+                                          selected
+                                              ? AppColors.filterGradient
+                                              : null,
+                                      color:
+                                          !selected
+                                              ? AppColors.chipUnselectedBg
+                                              : null,
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          dateData['label'],
+                                          style: TextStyle(
+                                            color:
+                                                selected
+                                                    ? Colors.white
+                                                    : Colors.white70,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          dateData['num'],
+                                          style: TextStyle(
+                                            color:
+                                                selected
+                                                    ? Colors.white
+                                                    : Colors.white70,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          dateData['month'],
+                                          style: TextStyle(
+                                            color:
+                                                selected
+                                                    ? Colors.white
+                                                    : Colors.white70,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           );
                         },
                       ),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(bottom: 8, left: 12),
+            padding: const EdgeInsets.only(bottom: 6, left: 8),
             child: SizedBox(
-              height: 32,
+              height: 24,
               width: double.infinity,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
@@ -1731,7 +2058,7 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
             child: Builder(
               builder: (context) {
                 num cheapestPrice = double.maxFinite;

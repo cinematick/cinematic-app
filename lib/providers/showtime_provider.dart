@@ -24,6 +24,6 @@ final showtimeProvider =
           throw Exception('Failed to load showtimes');
         }
       } catch (e) {
-        throw Exception('Error: $e');
+        throw Exception('Error fetching showtimes');
       }
     });

@@ -1,16 +1,18 @@
-import 'dart:async';
-import 'dart:convert';
 import 'package:cinematick/providers/navigation_providers.dart';
 import 'package:cinematick/views/show_time_screen.dart';
-import 'package:cinematick/views/tick/tick_screen.dart';
+import 'package:cinematick/views/cinema/cinema_detail_screen.dart';
 import 'package:cinematick/widgets/custom_app_bar.dart';
 import 'package:cinematick/widgets/filter_sheet.dart';
+import 'package:cinematick/widgets/region_selector.dart';
 import 'package:cinematick/widgets/search_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../../../../widgets/app_colors.dart';
-import 'home_screen_controller.dart';
+import 'package:cinematick/config/secrets.dart';
+import 'home_controller.dart';
 import 'home_screen_widgets.dart';
 
 class HomeScreenContent extends ConsumerStatefulWidget {
@@ -23,48 +25,46 @@ class HomeScreenContent extends ConsumerStatefulWidget {
 class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
   late HomeScreenController _controller;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final GlobalKey _searchBarKey = GlobalKey();
+
   bool _isSearching = false;
   String _searchQuery = '';
   List<Map<String, dynamic>> _searchResults = [];
+  String _selectedRegion = 'NSW';
 
   @override
   void initState() {
     super.initState();
     _controller = HomeScreenController(onStateChange: _onStateChange);
     _controller.initialize();
+    _loadCachedLocation();
   }
 
-  void _onStateChange() {
-    if (mounted) {
-      setState(() {});
+  Future<void> _loadCachedLocation() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedLocation = prefs.getString('selected_region') ?? 'NSW';
+      setState(() {
+        _selectedRegion = cachedLocation;
+      });
+    } catch (e) {
+      print('Error loading cached location: $e');
     }
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _performSearch(String query) {
-    setState(() {
-      _searchQuery = query.toLowerCase();
-      if (_searchQuery.isEmpty) {
-        _searchResults = [];
-        _isSearching = false;
-      } else {
-        _isSearching = true;
-        _searchResults =
-            _controller.trendingMovies.where((movie) {
-              final title = (movie['title'] ?? '').toString().toLowerCase();
-              return title.contains(_searchQuery);
-            }).toList();
+  Widget build(BuildContext context) {
+    ref.listen(bottomNavIndexProvider, (previous, next) {
+      if (previous != null && previous != 0 && next == 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            (_searchBarKey.currentState as dynamic)?.clearSearchBar();
+            _resetSearchState();
+          }
+        });
       }
     });
-  }
 
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       key: _scaffoldKey,
       drawerEnableOpenDragGesture: false,
@@ -79,74 +79,324 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
     );
   }
 
+  void _onStateChange() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _resetSearchState() {
+    if (mounted) {
+      setState(() {
+        _isSearching = false;
+        _searchQuery = '';
+        _searchResults = [];
+      });
+    }
+  }
+
+  void _performSearch(String query) {
+    setState(() {
+      _searchQuery = query.toLowerCase();
+      if (_searchQuery.isEmpty) {
+        _searchResults = [];
+      } else {
+        final suggestions = <Map<String, dynamic>>[];
+        final seenKeys = <String>{};
+
+        for (var movie in _controller.trendingMovies) {
+          final title = (movie['title'] ?? '').toString().toLowerCase();
+
+          if (title.isNotEmpty && title.contains(_searchQuery)) {
+            final key = 'movie_${movie['title']}';
+            if (!seenKeys.contains(key)) {
+              suggestions.add({
+                'type': 'movie',
+                'title': movie['title'],
+                'year': movie['year'] ?? '',
+                'rating': movie['rating'] ?? 'N/A',
+                'posterPath': movie['posterPath'] ?? movie['image'] ?? '',
+                'tmdbId': movie['tmdbId'] ?? movie['id'] ?? '',
+                'icon': Icons.movie,
+              });
+              seenKeys.add(key);
+            }
+          }
+        }
+
+        _searchCinemas(query, suggestions, seenKeys);
+
+        _searchResults = suggestions;
+      }
+    });
+  }
+
+  Future<void> _searchCinemas(
+    String query,
+    List<Map<String, dynamic>> suggestions,
+    Set<String> seenKeys,
+  ) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+          '$baseUrl/cinemas/search?query=$query&region=$_selectedRegion',
+        ),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final cinemas = (data as List?)?.cast<Map<String, dynamic>>() ?? [];
+        final queryLower = query.toLowerCase();
+
+        for (var cinema in cinemas) {
+          final cinemaName = (cinema['cinema_name'] ?? '').toString();
+          final cinemaCity = (cinema['cinema_city'] ?? '').toString();
+          final cinemaCityLower = cinemaCity.toLowerCase();
+          final key = 'cinema_$cinemaCity';
+
+          if (cinemaCityLower.isNotEmpty &&
+              cinemaCityLower.contains(queryLower)) {
+            if (!seenKeys.contains(key)) {
+              suggestions.add({
+                'type': 'cinema',
+                'name': cinemaName,
+                'city': cinemaCity,
+                'address': cinema['cinema_state'] ?? '',
+                'id': cinema['cinema_id'] ?? '',
+                'icon': Icons.location_on,
+              });
+              seenKeys.add(key);
+            }
+          }
+        }
+
+        if (mounted) {
+          setState(() {
+            _searchResults = suggestions;
+          });
+        }
+      }
+    } catch (e) {
+      print('Error searching cinemas: $e');
+    }
+  }
+
   Widget _buildSearchOverlay() {
-    return Positioned(
-      top: 0.0,
-      left: 0.0,
-      right: 0.0,
-      bottom: 0.0,
+    return Positioned.fill(
       child: Stack(
         children: [
           GestureDetector(
             onTap: () {
-              setState(() {
-                _searchQuery = '';
-                _searchResults = [];
-                _isSearching = false;
-              });
+              _resetSearchState();
             },
-            child: Container(color: Colors.black.withOpacity(0.3)),
+            child: Container(color: Colors.black.withOpacity(0.5)),
           ),
           Positioned(
-            top: 140.0,
-            left: 16.0,
-            right: 16.0,
+            top: 70,
+            left: 16,
+            right: 16,
             child: Container(
-              constraints: const BoxConstraints(maxHeight: 450),
-              decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 1, 14, 44),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              child: SearchBarWidget(
+                key: _searchBarKey,
+                hint: _controller.getHintText(),
+                onSearch: _performSearch,
+                onClear: () {
+                  _resetSearchState();
+                },
               ),
-              child:
-                  _searchResults.isEmpty
-                      ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.search,
-                              size: 48,
-                              color: Colors.white30,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No movies found for "$_searchQuery"',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                      : Scrollbar(
-                        thumbVisibility: true,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                          itemCount: _searchResults.length,
-                          itemBuilder: (context, index) {
-                            final movie = _searchResults[index];
-                            return _buildSearchResultItem(movie);
-                          },
-                        ),
-                      ),
             ),
           ),
+          if (_searchQuery.isNotEmpty)
+            Positioned(
+              top: 130,
+              left: 16,
+              right: 16,
+              child: _buildSearchSuggestionsBox(),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchSuggestionsBox() {
+    if (_searchResults.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.95),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+        ),
+        child: Text(
+          'No results found',
+          style: TextStyle(color: Colors.white.withOpacity(0.5)),
+        ),
+      );
+    }
+
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 300),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: _searchResults.length,
+        shrinkWrap: true,
+        physics: const BouncingScrollPhysics(),
+        itemBuilder: (context, index) {
+          final result = _searchResults[index];
+          final isLast = index == _searchResults.length - 1;
+          final isMovie = result['type'] == 'movie';
+
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () {
+                if (isMovie) {
+                  _openShowTime(result);
+                } else {
+                  _navigateToCinemaDetail(result);
+                }
+                _resetSearchState();
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  border:
+                      !isLast
+                          ? Border(
+                            bottom: BorderSide(
+                              color: Colors.white.withOpacity(0.1),
+                            ),
+                          )
+                          : null,
+                ),
+                child: Row(
+                  children: [
+                    if (isMovie)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Container(
+                          width: 40,
+                          height: 50,
+                          color: Colors.black26,
+                          child:
+                              (result['posterPath'] ?? '').toString().isNotEmpty
+                                  ? Image.network(
+                                    result['posterPath'],
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (_, __, ___) => const Center(
+                                          child: Icon(
+                                            Icons.movie,
+                                            color: Colors.white24,
+                                            size: 20,
+                                          ),
+                                        ),
+                                  )
+                                  : const Center(
+                                    child: Icon(
+                                      Icons.movie,
+                                      color: Colors.white24,
+                                      size: 20,
+                                    ),
+                                  ),
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF64B5F6).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(
+                          Icons.location_on,
+                          color: Color(0xFF64B5F6),
+                          size: 16,
+                        ),
+                      ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isMovie
+                                ? (result['title'] ?? 'Unknown')
+                                : (result['name'] ?? 'Unknown'),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          if (isMovie)
+                            Row(
+                              children: [
+                                if ((result['year'] ?? '')
+                                    .toString()
+                                    .isNotEmpty)
+                                  Text(
+                                    result['year'].toString(),
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.5),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                if ((result['year'] ?? '')
+                                    .toString()
+                                    .isNotEmpty)
+                                  const SizedBox(width: 8),
+                                Icon(
+                                  Icons.star_border_rounded,
+                                  size: 11,
+                                  color: Colors.white.withOpacity(0.6),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  result['rating']?.toString() ?? 'N/A',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.5),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            Text(
+                              result['city'] ?? 'Unknown Location',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.5),
+                                fontSize: 11,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -162,10 +412,12 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              _controller.errorMessage!,
+            const Icon(Icons.wifi_off, color: Colors.white30, size: 48),
+            const SizedBox(height: 16),
+            const Text(
+              'Check your connectivity',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
+              style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
@@ -179,8 +431,21 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
 
     return Column(
       children: [
-        CustomAppBar(),
-        _buildSearchBar(),
+        CustomAppBar(
+          onLocationTap: _showRegionSelector,
+          onSearchTap: _isSearching ? null : _focusSearchBar,
+          onCloseTap:
+              _isSearching
+                  ? () {
+                    setState(() {
+                      _isSearching = false;
+                      _searchQuery = '';
+                      _searchResults = [];
+                    });
+                    (_searchBarKey.currentState as dynamic)?.clearSearchBar();
+                  }
+                  : null,
+        ),
         _buildTabs(),
         _buildLanguageFilter(),
         Expanded(child: _buildTabContent()),
@@ -188,134 +453,9 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
     );
   }
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: SearchBarWidget(
-        hint: _controller.getHintText(),
-        onSearch: _performSearch,
-        onClear: () {
-          setState(() {
-            _searchQuery = '';
-            _searchResults = [];
-            _isSearching = false;
-          });
-        },
-      ),
-    );
-  }
-
-  Widget _buildSearchResultItem(Map<String, dynamic> movie) {
-    final title = movie['title'] ?? 'Unknown';
-    final year = movie['year'] ?? '';
-    final rating = movie['rating'] ?? '0';
-    final posterPath = movie['posterPath'] ?? movie['image'] ?? '';
-
-    return GestureDetector(
-      onTap: () => _openShowTime(movie),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Container(
-                width: 80,
-                height: 110,
-                color: Colors.black26,
-                child:
-                    posterPath.isNotEmpty
-                        ? Image.network(
-                          posterPath,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Center(
-                              child: Icon(
-                                Icons.movie,
-                                color: Colors.white24,
-                                size: 28,
-                              ),
-                            );
-                          },
-                        )
-                        : const Center(
-                          child: Icon(
-                            Icons.movie,
-                            color: Colors.white24,
-                            size: 28,
-                          ),
-                        ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      if (year.isNotEmpty)
-                        Text(
-                          year,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                          ),
-                        ),
-                      const SizedBox(width: 8),
-                      const Icon(
-                        Icons.star,
-                        size: 13,
-                        color: Color(0xFFFFB64B),
-                      ),
-                      const SizedBox(width: 3),
-                      Text(
-                        rating,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: const Color(0xFFB863D7).withOpacity(0.3),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.search,
-                color: Color(0xFFB863D7),
-                size: 18,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildTabs() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 10, 0, 7),
+      padding: const EdgeInsets.fromLTRB(10, 6, 0, 4),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
@@ -323,7 +463,7 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
             HomeScreenWidgets.tabChip(
               'Trending',
               0,
-              Icons.trending_up,
+              Icons.local_fire_department,
               _controller.tabIndex,
               () => setState(() => _controller.setTabIndex(0)),
             ),
@@ -348,14 +488,27 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
   }
 
   Widget _buildLanguageFilter() {
+    final displayLanguages = [
+      'English',
+      'Hindi',
+      'Telugu',
+      'Tamil',
+      'Kannada',
+      'Malayalam',
+      'Punjabi',
+      'Mandarin',
+      'Korean',
+      'Italian',
+    ];
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 8, 0, 7),
+      padding: const EdgeInsets.fromLTRB(10, 4, 0, 4),
       child: SizedBox(
-        height: 34,
+        height: 28,
         child: ListView.builder(
           scrollDirection: Axis.horizontal,
           physics: const BouncingScrollPhysics(),
-          itemCount: HomeScreenController.langList.length + 2,
+          itemCount: displayLanguages.length + 2,
           itemBuilder: (context, i) {
             if (i == 0) {
               return Padding(
@@ -368,15 +521,16 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
             }
 
             if (i == 1) {
-              final anySelected = _controller.langSelected.contains(true);
-              final allSelected =
-                  !anySelected && _controller.selectedLangIndex == -1;
+              final anyLanguageSelected = _controller.langSelected.contains(
+                true,
+              );
+              final allSelected = !anyLanguageSelected;
+
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: GestureDetector(
                   onTap: () {
                     setState(() {
-                      _controller.selectedLangIndex = -1;
                       for (
                         var j = 0;
                         j < _controller.langSelected.length;
@@ -396,22 +550,17 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
                               ? AppColors.chipSelectedBg
                               : AppColors.chipUnselectedBg,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'All',
-                          style: TextStyle(
-                            height: 1.0,
-                            color:
-                                allSelected
-                                    ? AppColors.chipSelectedText
-                                    : AppColors.chipUnselectedText,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      'All',
+                      style: TextStyle(
+                        height: 1,
+                        color:
+                            allSelected
+                                ? AppColors.chipSelectedText
+                                : AppColors.chipUnselectedText,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ),
@@ -419,17 +568,28 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
             }
 
             final langIdx = i - 2;
-            final anySelected = _controller.langSelected.contains(true);
+            final displayLanguage = displayLanguages[langIdx];
+
+            // Find the index of this language in the full langList
+            final fullLangIdx = _controller.langList.indexOf(displayLanguage);
             final selected =
-                anySelected
-                    ? _controller.langSelected[langIdx]
-                    : (langIdx == _controller.selectedLangIndex);
+                fullLangIdx >= 0
+                    ? _controller.langSelected[fullLangIdx]
+                    : false;
+
+            final capitalizedLanguage =
+                displayLanguage[0].toUpperCase() + displayLanguage.substring(1);
+
             return Padding(
               padding: const EdgeInsets.only(right: 8),
               child: GestureDetector(
-                onTap: () => setState(() => _controller.toggleChip(langIdx)),
+                onTap: () {
+                  if (fullLangIdx >= 0) {
+                    setState(() => _controller.toggleChip(fullLangIdx));
+                  }
+                },
                 child: HomeScreenWidgets.languageChip(
-                  HomeScreenController.langList[langIdx],
+                  capitalizedLanguage,
                   selected,
                 ),
               ),
@@ -445,47 +605,45 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final screenWidth = constraints.maxWidth;
-          late double horizontalPadding;
-          late double verticalPadding;
+          double paddingH;
+          double paddingV;
 
           if (screenWidth > 1200) {
-            horizontalPadding = 24;
-            verticalPadding = 4;
+            paddingH = 24;
+            paddingV = 4;
           } else if (screenWidth > 800) {
-            horizontalPadding = 16;
-            verticalPadding = 3;
+            paddingH = 16;
+            paddingV = 3;
           } else {
-            horizontalPadding = 8;
-            verticalPadding = 3;
+            paddingH = 8;
+            paddingV = 3;
           }
 
           return Padding(
             padding: EdgeInsets.symmetric(
-              horizontal: horizontalPadding,
-              vertical: verticalPadding,
+              horizontal: paddingH,
+              vertical: paddingV,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (_controller.tabIndex == -1) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   HomeScreenWidgets.sectionHeader(
                     'Trending',
-                    Icons.trending_up,
+                    Icons.local_fire_department,
                     onButtonPressed: _navigateToTickScreen,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   HomeScreenWidgets.buildTrendingCarouselOrList(
                     context,
                     _controller,
-                    (page) {
-                      setState(() => _controller.setTrendingPage(page));
-                    },
+                    (page) => setState(() => _controller.setTrendingPage(page)),
                     _openShowTime,
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 6),
                   HomeScreenWidgets.buildTrendingIndicators(_controller),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 12),
                   HomeScreenWidgets.sectionHeader(
                     'Now Playing',
                     Icons.local_movies_outlined,
@@ -493,8 +651,9 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
                   HomeScreenWidgets.buildGenericMovieGrid(
                     _controller.filteredNowPlayingMovies,
                     _openShowTime,
+                    errorMessage: _controller.errorMessage,
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 12),
                   HomeScreenWidgets.sectionHeader(
                     'Coming Soon',
                     Icons.schedule,
@@ -502,41 +661,47 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
                   HomeScreenWidgets.buildGenericMovieGrid(
                     _controller.filteredComingSoonMovies,
                     _openShowTime,
+                    errorMessage: _controller.errorMessage,
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 8),
                 ] else if (_controller.tabIndex == 0) ...[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 12),
                   HomeScreenWidgets.sectionHeader(
                     'Trending',
-                    Icons.trending_up,
+                    Icons.local_fire_department,
                   ),
+                  const SizedBox(height: 4),
                   HomeScreenWidgets.buildGenericMovieGrid(
                     _controller.filteredTrendingMoviesSortedByRating,
                     _openShowTime,
+                    errorMessage: _controller.errorMessage,
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 8),
                 ] else if (_controller.tabIndex == 1) ...[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 12),
                   HomeScreenWidgets.sectionHeader(
                     'Now Playing',
                     Icons.local_movies_outlined,
                   ),
+                  const SizedBox(height: 4),
                   HomeScreenWidgets.buildGenericMovieGrid(
                     _controller.filteredNowPlayingMovies,
                     _openShowTime,
+                    errorMessage: _controller.errorMessage,
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 8),
                 ] else ...[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 12),
                   HomeScreenWidgets.sectionHeader(
                     'Coming Soon',
                     Icons.schedule,
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 4),
                   HomeScreenWidgets.buildGenericMovieGrid(
                     _controller.filteredComingSoonMovies,
                     _openShowTime,
                   ),
+                  const SizedBox(height: 8),
                 ],
               ],
             ),
@@ -549,32 +714,38 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
   Widget _buildDrawer() {
     return SizedBox(
       width: MediaQuery.of(context).size.width * 0.9,
-      child: FilterSheetWidget(
-        allLanguages: HomeScreenController.allLanguages,
-        allExperiences: HomeScreenController.allExperiences,
-        allGenres: HomeScreenController.allGenres,
-        langSelected: _controller.langSelected,
-        xpSelected: _controller.xpSelected,
-        genreSelected: _controller.genreSelected,
-        onApply: () {
-          setState(() {
-            _controller.syncChipFromDrawer();
-            _controller.setTrendingPage(0);
-          });
-          Navigator.of(context).maybePop();
-        },
-        onClear: () {
-          setState(() {
-            for (var i = 0; i < _controller.langSelected.length; i++)
-              _controller.langSelected[i] = false;
-            for (var i = 0; i < _controller.xpSelected.length; i++)
-              _controller.xpSelected[i] = false;
-            for (var i = 0; i < _controller.genreSelected.length; i++)
-              _controller.genreSelected[i] = false;
-            _controller.selectedLangIndex = 0;
-            _controller.setTrendingPage(0);
-          });
-        },
+      child: GestureDetector(
+        onTap: () {},
+        child: FilterSheetWidget(
+          allLanguages: _controller.langList,
+          allExperiences: HomeScreenController.allExperiences,
+          allGenres: _controller.genreList,
+          langSelected: _controller.langSelected,
+          xpSelected: _controller.xpSelected,
+          genreSelected: _controller.genreSelected,
+          onApply: () {
+            setState(() {
+              _controller.syncChipFromDrawer();
+              _controller.setTrendingPage(0);
+            });
+            Navigator.of(context).maybePop();
+          },
+          onClear: () {
+            setState(() {
+              for (var i = 0; i < _controller.langSelected.length; i++) {
+                _controller.langSelected[i] = false;
+              }
+              for (var i = 0; i < _controller.xpSelected.length; i++) {
+                _controller.xpSelected[i] = false;
+              }
+              for (var i = 0; i < _controller.genreSelected.length; i++) {
+                _controller.genreSelected[i] = false;
+              }
+              _controller.selectedLangIndex = -1;
+              _controller.setTrendingPage(0);
+            });
+          },
+        ),
       ),
     );
   }
@@ -586,32 +757,149 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
 
     final backdropPath =
         (movie['backdropPath']?.toString().isNotEmpty == true
-            ? movie['backdropPath']?.toString()
-            : null) ??
-        (movie['backdrop']?.toString().isNotEmpty == true
-            ? movie['backdrop']?.toString()
-            : null) ??
-        (movie['image']?.toString().isNotEmpty == true
-            ? movie['image']?.toString()
-            : null) ??
-        (movie['posterPath']?.toString().isNotEmpty == true
-            ? movie['posterPath']?.toString()
-            : null) ??
-        '';
+                        ? movie['backdropPath']
+                        : movie['backdrop'])
+                    ?.toString()
+                    .isNotEmpty ==
+                true
+            ? movie['backdropPath'] ?? movie['backdrop']
+            : movie['image']?.toString().isNotEmpty == true
+            ? movie['image']
+            : movie['posterPath'] ?? '';
 
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder:
-            (_) => ShowTimeScreen(
-              movie: safe,
-              tmdbId: movie['tmdbId']?.toString() ?? '',
-              backdropPath: backdropPath,
-            ),
-      ),
-    );
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder:
+                (_) => ShowTimeScreen(
+                  movie: safe,
+                  tmdbId: movie['tmdbId']?.toString() ?? '',
+                  backdropPath: backdropPath.toString(),
+                  location: _selectedRegion,
+                ),
+          ),
+        )
+        .then((_) {
+          // Clear search bar when returning from ShowTimeScreen
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              (_searchBarKey.currentState as dynamic)?.clearSearchBar();
+              _resetSearchState();
+            }
+          });
+        });
+  }
+
+  void _navigateToCinemaDetail(Map<String, dynamic> cinema) {
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder:
+                (_) => CinemaDetailScreen(
+                  tmdbId: '',
+                  cinemaId: cinema['id']?.toString() ?? '',
+                  cinemaCity: cinema['city']?.toString() ?? '',
+                ),
+          ),
+        )
+        .then((_) {
+          // Clear search bar when returning
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              (_searchBarKey.currentState as dynamic)?.clearSearchBar();
+              _resetSearchState();
+            }
+          });
+        });
   }
 
   void _navigateToTickScreen() {
     ref.read(bottomNavIndexProvider.notifier).state = 2;
+  }
+
+  void _showRegionSelector() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder:
+          (context) => RegionSelector(
+            selectedRegion: _selectedRegion,
+            onRegionSelected: (region) {
+              setState(() {
+                _selectedRegion = region;
+              });
+              // Save to cache
+              _saveLocationToCache(region);
+              // Update the Riverpod provider
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                ref.read(selectedRegionProvider.notifier).state = region;
+              });
+              // Refetch movies, languages, and genres for the selected region
+              _controller.fetchMovies(region: region);
+              _controller.fetchLanguages(region: region);
+              _controller.fetchGenres(region: region);
+            },
+          ),
+    );
+  }
+
+  void _focusSearchBar() {
+    // Show search overlay when the icon is tapped
+    setState(() {
+      _isSearching = true;
+    });
+    // Focus on the search bar after the overlay is shown
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        (_searchBarKey.currentState as dynamic)?.focusSearchBar();
+      }
+    });
+  }
+
+  void _showFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder:
+          (context) => FilterSheetWidget(
+            allLanguages: _controller.langList,
+            allExperiences: HomeScreenController.allExperiences,
+            allGenres: _controller.genreList,
+            langSelected: _controller.langSelected,
+            xpSelected: _controller.xpSelected,
+            genreSelected: _controller.genreSelected,
+            onApply: () {
+              setState(() {
+                _controller.syncChipFromDrawer();
+                _controller.setTrendingPage(0);
+              });
+              Navigator.of(context).maybePop();
+            },
+            onClear: () {
+              setState(() {
+                for (var i = 0; i < _controller.langSelected.length; i++) {
+                  _controller.langSelected[i] = false;
+                }
+                for (var i = 0; i < _controller.xpSelected.length; i++) {
+                  _controller.xpSelected[i] = false;
+                }
+                for (var i = 0; i < _controller.genreSelected.length; i++) {
+                  _controller.genreSelected[i] = false;
+                }
+                _controller.selectedLangIndex = -1;
+                _controller.setTrendingPage(0);
+              });
+            },
+          ),
+    );
+  }
+
+  Future<void> _saveLocationToCache(String location) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('selected_region', location);
+    } catch (e) {
+      print('Error saving location to cache: $e');
+    }
   }
 }

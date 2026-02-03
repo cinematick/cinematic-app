@@ -11,3 +11,5 @@ final selectedCinemaLocationProvider =
 final selectedMovieTitleProvider = StateProvider<String?>((ref) => null);
 
 final bottomNavIndexProvider = StateProvider<int>((ref) => 0);
+
+final selectedRegionProvider = StateProvider<String>((ref) => 'NSW');

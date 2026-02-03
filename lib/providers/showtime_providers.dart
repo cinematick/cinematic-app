@@ -1,12 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cinematick/repositories/cinema_repository.dart';
+import 'package:cinematick/providers/navigation_providers.dart';
 
 final cinemaShowtimeProvider = StateNotifierProvider.family<
   CinemaShowtimeNotifier,
   CinemaShowtimeState,
   String
 >((ref, cinemaId) {
-  return CinemaShowtimeNotifier(cinemaId, ref.watch(repositoryProvider));
+  final region = ref.watch(selectedRegionProvider);
+  return CinemaShowtimeNotifier(
+    cinemaId,
+    ref.watch(repositoryProvider),
+    region,
+  );
 });
 
 final repositoryProvider = Provider((ref) => CinemaRepository());
@@ -46,8 +52,9 @@ class CinemaShowtimeState {
 class CinemaShowtimeNotifier extends StateNotifier<CinemaShowtimeState> {
   final String cinemaId;
   final CinemaRepository _repository;
+  final String _region;
 
-  CinemaShowtimeNotifier(this.cinemaId, this._repository)
+  CinemaShowtimeNotifier(this.cinemaId, this._repository, this._region)
     : super(CinemaShowtimeState()) {
     fetchShowtimes();
   }
@@ -55,7 +62,10 @@ class CinemaShowtimeNotifier extends StateNotifier<CinemaShowtimeState> {
   Future<void> fetchShowtimes() async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
-      final response = await _repository.getCinemaShowtimes(cinemaId);
+      final response = await _repository.getCinemaShowtimes(
+        cinemaId,
+        region: _region,
+      );
       final movies = List<Map<String, dynamic>>.from(response['movies'] ?? []);
       state = state.copyWith(
         cinemaDetails: response['cinema'],

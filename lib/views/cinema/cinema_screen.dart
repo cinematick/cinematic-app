@@ -5,11 +5,13 @@ import 'package:cinematick/providers/navigation_providers.dart';
 import 'package:cinematick/views/cinema/cinema_detail_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class CinemaScreen extends ConsumerStatefulWidget {
   final Function(String, String, String)? onChainSelected;
+  final String location;
 
-  const CinemaScreen({super.key, this.onChainSelected});
+  const CinemaScreen({super.key, this.onChainSelected, this.location = 'NSW'});
 
   @override
   ConsumerState<CinemaScreen> createState() => _CinemaScreenState();
@@ -27,7 +29,7 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
     } else if (screenWidth < 600) {
       return 3;
     } else if (screenWidth < 1000) {
-      return 4;
+      return 3;
     } else {
       return 6;
     }
@@ -36,13 +38,13 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
   double _getChildAspectRatio(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     if (screenWidth < 400) {
-      return 1.2;
+      return 0.95;
     } else if (screenWidth < 600) {
-      return 1.08;
+      return 0.90;
     } else if (screenWidth < 1000) {
-      return 1.12;
+      return 0.92;
     } else {
-      return 1.15;
+      return 0.95;
     }
   }
 
@@ -57,10 +59,12 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
 
   String _getChainImage(String chainName) {
     final chainImageMap = {
-      'event': 'lib/assets/event.png',
-      'hoyts': 'lib/assets/hoyts.png',
-      'read': 'lib/assets/read.png',
-      'village': 'lib/assets/village.png',
+      'event': 'lib/assets/event.svg',
+      'hoyts': 'lib/assets/hoytsau.svg',
+      'read': 'lib/assets/readingau.svg',
+      'village': 'lib/assets/village.svg',
+      'country': 'lib/assets/country.svg',
+      'palace': 'lib/assets/palace.svg',
     };
 
     final lowerChainName = chainName.toLowerCase();
@@ -75,17 +79,33 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
       }
     }
 
-    return 'lib/assets/event.png';
+    return 'lib/assets/event.svg';
   }
 
   @override
   Widget build(BuildContext context) {
     final chainState = ref.watch(cinemaChainProvider);
+    final selectedRegion = ref.watch(selectedRegionProvider);
+
+    // Clear cache when region changes so locations are refetched for new region
+    ref.listen(selectedRegionProvider, (previous, next) {
+      if (previous != null && previous != next) {
+        setState(() {
+          cinemasByChain.clear();
+        });
+        print('Region changed from $previous to $next - cinema cache cleared');
+      }
+    });
 
     for (final chain in chainState.filteredChains) {
       final chainId = chain['chain_id'] as String?;
-      if (chainId != null && !cinemasByChain.containsKey(chainId)) {
-        final locationState = ref.watch(cinemaLocationProvider(chainId));
+      final chainName = chain['chain_name'] as String?;
+      if (chainId != null &&
+          chainName != null &&
+          !cinemasByChain.containsKey(chainId)) {
+        final locationState = ref.watch(
+          cinemaLocationProvider((chainId, chainName)),
+        );
         if (mounted && locationState.locations.isNotEmpty) {
           setState(() {
             cinemasByChain[chainId] = locationState.locations;
@@ -146,103 +166,33 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
                 else
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(right: 12),
-                              child: GestureDetector(
-                                onTap: () {
-                                  setState(() => selectedChainId = null);
-                                },
-                                child: SizedBox(
-                                  width: 80,
-                                  height: 80,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      gradient:
-                                          selectedChainId == null
-                                              ? const LinearGradient(
-                                                begin: Alignment.topLeft,
-                                                end: Alignment.bottomRight,
-                                                colors: [
-                                                  Color(0xFF7B3FF2),
-                                                  Color(0xFF5A1EA9),
-                                                ],
-                                              )
-                                              : null,
-                                      color:
-                                          selectedChainId != null
-                                              ? Colors.white.withOpacity(0.08)
-                                              : null,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border(
-                                        top: BorderSide(
-                                          color: Colors.white.withOpacity(0.3),
-                                          width: 1,
-                                        ),
-                                        left: BorderSide(
-                                          color: Colors.white.withOpacity(0.3),
-                                          width: 1,
-                                        ),
-                                        right: BorderSide(
-                                          color: Colors.white.withOpacity(0.3),
-                                          width: 1,
-                                        ),
-                                        bottom: BorderSide(
-                                          color: Colors.white.withOpacity(0.3),
-                                          width: 1,
-                                        ),
-                                      ),
-                                    ),
-                                    child: Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(
-                                            Icons.movie,
-                                            color: Colors.white,
-                                            size: 32,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          const Text(
-                                            'All',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            ...List.generate(chainState.filteredChains.length, (
-                              index,
-                            ) {
-                              final chain = chainState.filteredChains[index];
-                              final chainName = chain['chain_name'] ?? '';
-                              final chainId = chain['chain_id'] ?? '';
-                              final isSelected = selectedChainId == chainId;
-
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 12),
+                      padding: const EdgeInsets.fromLTRB(18, 0, 18, 0),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color.fromARGB(0, 16, 3, 3),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.15),
+                            width: 1.5,
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(12),
                                 child: GestureDetector(
                                   onTap: () {
-                                    setState(() => selectedChainId = chainId);
+                                    setState(() => selectedChainId = null);
                                   },
                                   child: SizedBox(
-                                    width: 80,
-                                    height: 80,
+                                    width: 75,
+                                    height: 75,
                                     child: Container(
                                       decoration: BoxDecoration(
                                         gradient:
-                                            isSelected
+                                            selectedChainId == null
                                                 ? const LinearGradient(
                                                   begin: Alignment.topLeft,
                                                   end: Alignment.bottomRight,
@@ -253,7 +203,7 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
                                                 )
                                                 : null,
                                         color:
-                                            !isSelected
+                                            selectedChainId != null
                                                 ? Colors.white.withOpacity(0.08)
                                                 : null,
                                         borderRadius: BorderRadius.circular(12),
@@ -284,29 +234,23 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
                                           ),
                                         ),
                                       ),
-                                      child: Center(
+                                      child: const Center(
                                         child: Column(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            SizedBox(
-                                              width: 48,
-                                              height: 48,
-                                              child: Image.asset(
-                                                _getChainImage(chainName),
-                                                fit: BoxFit.contain,
-                                              ),
+                                            Icon(
+                                              Icons.movie,
+                                              color: Colors.white,
+                                              size: 32,
                                             ),
-                                            const SizedBox(height: 4),
+                                            SizedBox(height: 4),
                                             Text(
-                                              chainName,
-                                              style: const TextStyle(
+                                              'All',
+                                              style: TextStyle(
                                                 color: Colors.white,
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.w400,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
                                               ),
-                                              textAlign: TextAlign.center,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ],
                                         ),
@@ -314,9 +258,113 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
                                     ),
                                   ),
                                 ),
-                              );
-                            }),
-                          ],
+                              ),
+                              ...List.generate(
+                                chainState.filteredChains.length,
+                                (index) {
+                                  final chain =
+                                      chainState.filteredChains[index];
+                                  final chainName = chain['chain_name'] ?? '';
+                                  final chainId = chain['chain_id'] ?? '';
+                                  final isSelected = selectedChainId == chainId;
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 12),
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        setState(
+                                          () => selectedChainId = chainId,
+                                        );
+                                      },
+                                      child: SizedBox(
+                                        width: 75,
+                                        height: 75,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            gradient:
+                                                isSelected
+                                                    ? const LinearGradient(
+                                                      begin: Alignment.topLeft,
+                                                      end:
+                                                          Alignment.bottomRight,
+                                                      colors: [
+                                                        Color(0xFF7B3FF2),
+                                                        Color(0xFF5A1EA9),
+                                                      ],
+                                                    )
+                                                    : null,
+                                            color:
+                                                !isSelected
+                                                    ? Colors.white.withOpacity(
+                                                      0.08,
+                                                    )
+                                                    : null,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            border: Border(
+                                              top: BorderSide(
+                                                color: Colors.white.withOpacity(
+                                                  0.3,
+                                                ),
+                                                width: 1,
+                                              ),
+                                              left: BorderSide(
+                                                color: Colors.white.withOpacity(
+                                                  0.3,
+                                                ),
+                                                width: 1,
+                                              ),
+                                              right: BorderSide(
+                                                color: Colors.white.withOpacity(
+                                                  0.3,
+                                                ),
+                                                width: 1,
+                                              ),
+                                              bottom: BorderSide(
+                                                color: Colors.white.withOpacity(
+                                                  0.3,
+                                                ),
+                                                width: 1,
+                                              ),
+                                            ),
+                                          ),
+                                          child: Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                SizedBox(
+                                                  width: 48,
+                                                  height: 48,
+                                                  child: SvgPicture.asset(
+                                                    _getChainImage(chainName),
+                                                    fit: BoxFit.contain,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  chainName,
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w400,
+                                                  ),
+                                                  textAlign: TextAlign.center,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -342,16 +390,17 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
 
                           final chainName = chain['chain_name'] ?? 'Cinema';
                           final chainId = chain['chain_id'] ?? '';
-                          final cinemaCount = chain['cinemaCount'] ?? 12;
+                          final cinemaLocations = cinemasByChain[chainId] ?? [];
+                          final actualCinemaCount = cinemaLocations.length;
 
                           return Column(
                             children: [
                               Padding(
                                 padding: const EdgeInsets.fromLTRB(
                                   18,
-                                  20,
-                                  18,
                                   16,
+                                  18,
+                                  12,
                                 ),
                                 child: Row(
                                   children: [
@@ -362,10 +411,9 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
                                         color: Colors.white.withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: const Icon(
-                                        Icons.movie_creation_outlined,
-                                        color: Colors.white,
-                                        size: 20,
+                                      child: SvgPicture.asset(
+                                        _getChainImage(chainName),
+                                        fit: BoxFit.contain,
                                       ),
                                     ),
                                     const SizedBox(width: 12),
@@ -383,7 +431,7 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          '$cinemaCount locations',
+                                          '$actualCinemaCount locations',
                                           style: TextStyle(
                                             color: Colors.white.withOpacity(
                                               0.6,
@@ -397,87 +445,107 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
                                   ],
                                 ),
                               ),
-                              Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: _getGridPadding(context),
+                              Container(
+                                margin: const EdgeInsets.fromLTRB(
+                                  18,
+                                  0,
+                                  18,
+                                  16,
                                 ),
-                                child: GridView.builder(
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  gridDelegate:
-                                      SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: _getGridColumnCount(
-                                          context,
+                                decoration: BoxDecoration(
+                                  color: const Color.fromARGB(
+                                    255,
+                                    10,
+                                    10,
+                                    10,
+                                  ).withOpacity(0.05),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.15),
+                                    width: 1.5,
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: _getGridPadding(context),
+                                    vertical: 12,
+                                  ),
+                                  child: GridView.builder(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    gridDelegate:
+                                        SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: _getGridColumnCount(
+                                            context,
+                                          ),
+                                          crossAxisSpacing: 8,
+                                          mainAxisSpacing: 10,
+                                          childAspectRatio:
+                                              _getChildAspectRatio(context),
                                         ),
-                                        crossAxisSpacing: 10,
-                                        mainAxisSpacing: 2,
-                                        childAspectRatio: _getChildAspectRatio(
-                                          context,
-                                        ),
-                                      ),
-                                  itemCount:
-                                      cinemasByChain[chainId]?.length ??
-                                      cinemaCount,
-                                  itemBuilder: (context, index) {
-                                    final cinemaLocations =
-                                        cinemasByChain[chainId] ?? [];
-                                    final cinema =
-                                        cinemaLocations.isNotEmpty &&
-                                                index < cinemaLocations.length
-                                            ? cinemaLocations[index]
-                                            : null;
-                                    final cinemaCity =
-                                        cinema != null
-                                            ? (cinema['cinema_city'] ??
-                                                'Unknown')
-                                            : 'Unknown';
+                                    itemCount: actualCinemaCount,
+                                    itemBuilder: (context, index) {
+                                      final cinema =
+                                          cinemaLocations.isNotEmpty &&
+                                                  index < cinemaLocations.length
+                                              ? cinemaLocations[index]
+                                              : null;
 
-                                    return _CinemaLocationCard(
-                                      index: index,
-                                      chainName: chainName,
-                                      cinemaCity: cinemaCity,
-                                      cinema: cinema,
-                                      context: context,
-                                      onTap: () {
-                                        if (cinema != null) {
-                                          final cinemaId =
-                                              cinema['cinema_id'] as String?;
-                                          final screenCounts = [
-                                            16,
-                                            18,
-                                            14,
-                                            12,
-                                            18,
-                                            9,
-                                            16,
-                                            11,
-                                            8,
-                                            8,
-                                            9,
-                                            8,
-                                          ];
-                                          final screenCount =
-                                              screenCounts[index %
-                                                  screenCounts.length];
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                              builder:
-                                                  (context) =>
-                                                      CinemaDetailScreen(
-                                                        tmdbId: '86512',
-                                                        cinema: cinema,
-                                                        cinemaCity: cinemaCity,
-                                                        chainName: chainName,
-                                                        cinemaId: cinemaId,
-                                                        screenCount:
-                                                            screenCount,
-                                                      ),
-                                            ),
-                                          );
-                                        }
-                                      },
-                                    );
-                                  },
+                                      final cinemaName =
+                                          cinema != null
+                                              ? (cinema['cinema_name']
+                                                      as String?) ??
+                                                  'Unknown'
+                                              : 'Unknown';
+
+                                      return _CinemaLocationCard(
+                                        index: index,
+                                        chainName: chainName,
+                                        cinemaName: cinemaName,
+                                        cinema: cinema,
+                                        context: context,
+                                        onTap: () {
+                                          if (cinema != null) {
+                                            final cinemaId =
+                                                cinema['cinema_id'] as String?;
+                                            final screenCounts = [
+                                              16,
+                                              18,
+                                              14,
+                                              12,
+                                              18,
+                                              9,
+                                              16,
+                                              11,
+                                              8,
+                                              8,
+                                              9,
+                                              8,
+                                            ];
+                                            final screenCount =
+                                                screenCounts[index %
+                                                    screenCounts.length];
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder:
+                                                    (
+                                                      context,
+                                                    ) => CinemaDetailScreen(
+                                                      tmdbId: '86512',
+                                                      cinema: cinema,
+                                                      cinemaCity: cinemaName,
+                                                      chainName: chainName,
+                                                      cinemaId: cinemaId,
+                                                      screenCount: screenCount,
+                                                    ),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
                             ],
@@ -499,7 +567,7 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
 class _CinemaLocationCard extends StatelessWidget {
   final int index;
   final String chainName;
-  final String cinemaCity;
+  final String cinemaName;
   final Map<String, dynamic>? cinema;
   final VoidCallback onTap;
   final BuildContext context;
@@ -507,7 +575,7 @@ class _CinemaLocationCard extends StatelessWidget {
   const _CinemaLocationCard({
     required this.index,
     required this.chainName,
-    required this.cinemaCity,
+    required this.cinemaName,
     required this.onTap,
     required this.context,
     this.cinema,
@@ -515,10 +583,12 @@ class _CinemaLocationCard extends StatelessWidget {
 
   String _getSvgPath(String chainName) {
     final chainImageMap = {
-      'event': 'lib/assets/event.png',
-      'hoyts': 'lib/assets/hoyts.png',
-      'read': 'lib/assets/read.png',
-      'village': 'lib/assets/village.png',
+      'event': 'lib/assets/event.svg',
+      'hoyts': 'lib/assets/hoytsau.svg',
+      'read': 'lib/assets/readingau.svg',
+      'village': 'lib/assets/village.svg',
+      'country': 'lib/assets/country.svg',
+      'palace': 'lib/assets/palace.svg',
     };
 
     final lowerChainName = chainName.toLowerCase();
@@ -533,80 +603,77 @@ class _CinemaLocationCard extends StatelessWidget {
       }
     }
 
-    return 'lib/assets/event.png';
+    return 'lib/assets/event.svg';
   }
 
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final padding = screenWidth < 600 ? 10.0 : 14.0;
-    final badgeFontSize = screenWidth < 400 ? 8.0 : 9.0;
-    final locationFontSize = screenWidth < 400 ? 9.0 : 10.0;
+    final padding = screenWidth < 600 ? 6.0 : 8.0;
+    final locationFontSize = screenWidth < 400 ? 10.0 : 11.0;
+    final imageHeight = screenWidth < 400 ? 28.0 : 32.0;
+    final spacingHeight = screenWidth < 400 ? 2.0 : 2.0;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: Colors.transparent,
+          color: Colors.white.withOpacity(0.05),
+          border: Border.all(color: Colors.white.withOpacity(0.1), width: 1.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              padding: EdgeInsets.symmetric(
-                horizontal: padding,
-                vertical: padding * 0.2,
-              ),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFF5A1EA9).withOpacity(0.8),
-                    const Color(0xFF3A0E68).withOpacity(0.9),
+            Expanded(
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: padding,
+                  vertical: padding * 1.0,
+                ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      const Color(0xFF581C87).withOpacity(0.8),
+                      const Color(0xFF3A0E68).withOpacity(0.9),
+                    ],
+                  ),
+                  borderRadius: const BorderRadius.all(Radius.circular(16)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      height: imageHeight,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: SvgPicture.asset(
+                        _getSvgPath(chainName),
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    SizedBox(height: spacingHeight),
+                    Flexible(
+                      child: Text(
+                        cinemaName,
+                        textAlign: TextAlign.center,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: locationFontSize,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-                borderRadius: const BorderRadius.all(Radius.circular(16)),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    height: 54,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Image.asset(
-                      _getSvgPath(chainName),
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                  SizedBox(height: screenWidth < 400 ? 4 : 5),
-                  Text(
-                    cinemaCity,
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: locationFontSize,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: const BoxDecoration(
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                ),
-              ),
-              child: const SizedBox.shrink(),
             ),
           ],
         ),

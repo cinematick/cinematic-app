@@ -1,11 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cinematick/repositories/cinema_repository.dart';
+import 'package:cinematick/providers/navigation_providers.dart';
 
 final repositoryProvider = Provider((ref) => CinemaRepository());
 
 final cinemaChainProvider =
     StateNotifierProvider<CinemaChainNotifier, CinemaChainState>((ref) {
-      return CinemaChainNotifier(ref.watch(repositoryProvider));
+      final region = ref.watch(selectedRegionProvider);
+      return CinemaChainNotifier(ref.watch(repositoryProvider), region);
     });
 
 class CinemaChainState {
@@ -38,21 +40,27 @@ class CinemaChainState {
 
 class CinemaChainNotifier extends StateNotifier<CinemaChainState> {
   final CinemaRepository _repository;
+  final String _region;
 
-  CinemaChainNotifier(this._repository) : super(CinemaChainState()) {
+  CinemaChainNotifier(this._repository, this._region)
+    : super(CinemaChainState()) {
     fetchCinemaChains();
   }
 
   Future<void> fetchCinemaChains() async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
-      final chains = await _repository.getCinemaChains();
+      final chains = await _repository.getCinemaChains(region: _region);
+      // Check if the notifier is still mounted before updating state
+      if (!mounted) return;
       state = state.copyWith(
         chains: chains,
         filteredChains: chains,
         isLoading: false,
       );
     } catch (e) {
+      // Check if the notifier is still mounted before updating state
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
     }
   }
@@ -78,9 +86,16 @@ class CinemaChainNotifier extends StateNotifier<CinemaChainState> {
 final cinemaLocationProvider = StateNotifierProvider.family<
   CinemaLocationNotifier,
   CinemaLocationState,
-  String
->((ref, chainId) {
-  return CinemaLocationNotifier(chainId, ref.watch(repositoryProvider));
+  (String, String)
+>((ref, params) {
+  final (chainId, chainName) = params;
+  final region = ref.watch(selectedRegionProvider);
+  return CinemaLocationNotifier(
+    chainId,
+    chainName,
+    ref.watch(repositoryProvider),
+    region,
+  );
 });
 
 class CinemaLocationState {
@@ -113,23 +128,50 @@ class CinemaLocationState {
 
 class CinemaLocationNotifier extends StateNotifier<CinemaLocationState> {
   final String chainId;
+  final String chainName;
   final CinemaRepository _repository;
+  final String _region;
 
-  CinemaLocationNotifier(this.chainId, this._repository)
-    : super(CinemaLocationState()) {
+  CinemaLocationNotifier(
+    this.chainId,
+    this.chainName,
+    this._repository,
+    this._region,
+  ) : super(CinemaLocationState()) {
     fetchLocations();
   }
 
   Future<void> fetchLocations() async {
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
-      final locations = await _repository.getCinemaLocations(chainId);
+      final allLocations = await _repository.getCinemaLocations(
+        chainId,
+        region: _region,
+      );
+      // Check if the notifier is still mounted before updating state
+      if (!mounted) return;
+
+      print('=== FETCHED CINEMA LOCATIONS ===');
+      print('Chain ID: $chainId');
+      print('Chain Name: $chainName');
+      print('Region: $_region');
+      print('Total locations received: ${allLocations.length}');
+      if (allLocations.isNotEmpty) {
+        print('First location: ${allLocations.first}');
+        print('All locations: $allLocations');
+      }
+      print('================================');
+
+      // API already filters by chain_id, so use all returned locations directly
       state = state.copyWith(
-        locations: locations,
-        filteredLocations: locations,
+        locations: allLocations,
+        filteredLocations: allLocations,
         isLoading: false,
       );
     } catch (e) {
+      // Check if the notifier is still mounted before updating state
+      if (!mounted) return;
+      print('Error fetching cinema locations: $e');
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
     }
   }

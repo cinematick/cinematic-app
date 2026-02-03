@@ -1,20 +1,15 @@
+import 'package:cinematick/views/tick/sticky_header.dart';
+import 'package:cinematick/views/tick/cinema_movie_tile.dart';
 import 'package:cinematick/widgets/app_colors.dart';
 import 'package:cinematick/widgets/custom_app_bar.dart';
-import 'package:cinematick/widgets/custom_bottom_nav.dart';
+import 'package:cinematick/widgets/filter_sheet.dart';
 import 'package:cinematick/providers/navigation_providers.dart';
+import 'package:cinematick/providers/timezone_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'dart:ui' as ui;
-import 'package:cinematick/widgets/filter_sheet.dart';
-import 'package:cinematick/widgets/info_row_card.dart';
-import 'package:cinematick/widgets/theatre_tile.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:timezone/timezone.dart' as tz;
 import 'dart:math' as math;
-import 'package:cinematick/views/show_time_screen.dart';
-import 'package:cinematick/config/secrets.dart';
+import 'tick_controller.dart';
 
 class TickScreen extends ConsumerStatefulWidget {
   final Map<String, String>? movie;
@@ -29,247 +24,181 @@ class TickScreen extends ConsumerStatefulWidget {
     this.onBackPressed,
     this.backdropPath,
   });
+
   @override
   ConsumerState<TickScreen> createState() => _TickScreenState();
 }
 
 class _TickScreenState extends ConsumerState<TickScreen> {
-  int selectedDateIndex = 0;
-  int selectedLangIndex = -1;
-  int selectedInfoIndex = 0;
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _movies = [];
-  String? _errorMessage;
-  List<Map<String, dynamic>> _generatedDates = [];
-  List<String> _availableLanguages = [];
-  String _searchQuery = '';
-  Position? _userPosition;
-
-  final List<String> _allExperiences = ['2D', '3D', 'IMAX', 'Dolby'];
-  final List<String> _allGenres = [
-    'Action',
-    'Comedy',
-    'Drama',
-    'Sci‑Fi',
-    'Horror',
-    'Romance',
-    'Thriller',
-  ];
-  List<bool> _langSelected = [];
-  List<bool> _xpSelected = [];
-  List<bool> _genreSelected = [];
+  late final FocusNode _searchFocusNode;
+  late final TextEditingController _searchTextController;
 
   @override
   void initState() {
     super.initState();
-    _xpSelected = List<bool>.filled(_allExperiences.length, false);
-    _genreSelected = List<bool>.filled(_allGenres.length, false);
-    _generatedDates = _generateDates();
-    _getUserLocation();
-    _fetchMovies();
+    _searchFocusNode = FocusNode();
+    _searchTextController = TextEditingController();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _searchFocusNode.unfocus();
+      _searchTextController.clear();
+      final controller = ref.read(tickControllerProvider.notifier);
+      controller.closeSearchSuggestions();
+      controller.resetPagination();
+    });
   }
 
   @override
   void dispose() {
+    _searchFocusNode.dispose();
+    _searchTextController.dispose();
     super.dispose();
   }
 
-  Future<void> _getUserLocation() async {
-    try {
-      final permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        await Geolocator.requestPermission();
-      }
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      if (mounted) {
-        setState(() {
-          _userPosition = position;
-        });
-      }
-    } catch (e) {
-      print('Error getting user location: $e');
-    }
-  }
+  bool _hasAnyFutureShowtime(Map<String, dynamic> movie, String region) {
+    final showtimes =
+        (movie['showtimes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
-  double _calculateDistance(
-    double lat1,
-    double lon1,
-    double lat2,
-    double lon2,
-  ) {
-    const earthRadiusKm = 6371.0;
-    final dLat = _degreesToRadians(lat2 - lat1);
-    final dLon = _degreesToRadians(lon2 - lon1);
-    final a =
-        math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(_degreesToRadians(lat1)) *
-            math.cos(_degreesToRadians(lat2)) *
-            math.sin(dLon / 2) *
-            math.sin(dLon / 2);
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return earthRadiusKm * c;
-  }
+    for (var showtime in showtimes) {
+      final timeStr = showtime['time']?.toString() ?? '';
+      if (timeStr.isEmpty) continue;
 
-  double _degreesToRadians(double degrees) {
-    return degrees * math.pi / 180.0;
-  }
-
-  Future<void> _fetchMovies() async {
-    try {
-      String dateStr;
-      if (_generatedDates.isNotEmpty) {
-        dateStr = _generatedDates[selectedDateIndex]['dateStr'];
-      } else {
-        final now = DateTime.now();
-        dateStr =
-            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      }
-
-      print('Fetching showtimes from /v1/tick endpoint for date: $dateStr');
-      final response = await http.get(Uri.parse('$baseUrl/tick?date=$dateStr'));
-
-      print('API Response Status: ${response.statusCode}');
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        print('Decoded data length: ${data.length}');
-
-        if (data.isEmpty) {
-          setState(() {
-            _movies = [];
-            _availableLanguages = [];
-            _langSelected = [];
-            selectedLangIndex = -1; 
-            _generatedDates = _generateDates();
-            _isLoading = false;
-            _errorMessage = 'No movies available';
-          });
-          return;
+      try {
+        DateTime showTime = DateTime.parse(timeStr);
+        if (!timeStr.contains('Z')) {
+          showTime = showTime.toUtc();
         }
 
-        setState(() {
-          _movies = List<Map<String, dynamic>>.from(data);
-          _availableLanguages = _extractAvailableLanguages();
-          _langSelected = List<bool>.filled(_availableLanguages.length, false);
-          selectedLangIndex =
-              -1;
-          _errorMessage = null; 
-          print('Loaded ${_movies.length} movies');
-          print('Available languages: $_availableLanguages');
-          if (_movies.isNotEmpty) {
-            print('First movie keys: ${_movies[0].keys.toList()}');
-            print('First movie data: ${_movies[0]}');
-          }
-          _isLoading = false;
-        });
-      } else {
-        if (!mounted) return;
-        setState(() {
-          _errorMessage =
-              'Failed to load movies (Status: ${response.statusCode})';
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = 'Error: $e';
-        _isLoading = false;
-      });
-    }
-  }
+        final regionTimezoneMap = ref.read(
+          availableAustralianTimezonesProvider,
+        );
+        final timezoneName = regionTimezoneMap[region] ?? 'Australia/Sydney';
+        final location = tz.getLocation(timezoneName);
 
-  List<Map<String, dynamic>> _generateDates() {
-    List<Map<String, dynamic>> dates = [];
-    final now = DateTime.now();
+        final nowInRegion = tz.TZDateTime.from(
+          DateTime.now().toUtc(),
+          location,
+        );
+        final showtimeInRegion = tz.TZDateTime.from(showTime, location);
 
-    for (int i = 0; i < 6; i++) {
-      final date = now.add(Duration(days: i));
-      final dayName =
-          ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(date.weekday % 7)];
-      final monthName =
-          [
-            'Jan',
-            'Feb',
-            'Mar',
-            'Apr',
-            'May',
-            'Jun',
-            'Jul',
-            'Aug',
-            'Sep',
-            'Oct',
-            'Nov',
-            'Dec',
-          ][date.month - 1];
+        final isPassed = showtimeInRegion.isBefore(nowInRegion);
 
-      dates.add({
-        'label': dayName,
-        'num': date.day.toString(),
-        'month': monthName,
-        'dateStr':
-            '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
-      });
-    }
-    return dates;
-  }
-
-  List<String> _extractAvailableLanguages() {
-    final languageSet = <String>{};
-    for (var movie in _movies) {
-      final language = movie['language'] as String?;
-      if (language != null && language.isNotEmpty) {
-        languageSet.add(language);
+        if (!isPassed) {
+          return true;
+        }
+      } catch (e) {
+        return true;
       }
     }
-    return languageSet.toList()..sort();
+    return false;
   }
 
-  void _ensureFiltersReady() {
-    if (_xpSelected.length != _allExperiences.length) {
-      _xpSelected = List<bool>.filled(_allExperiences.length, false);
+  List<Widget> _buildPageNumbers(
+    int currentPage,
+    int totalPages,
+    TickController controller,
+  ) {
+    List<Widget> widgets = [];
+    const maxVisible = 5;
+
+    if (totalPages <= maxVisible) {
+      for (int i = 0; i < totalPages; i++) {
+        widgets.add(
+          _PaginationButton(
+            onPressed: () => controller.goToPage(i),
+            label: '${i + 1}',
+            isActive: i == currentPage,
+          ),
+        );
+      }
+    } else {
+      widgets.add(
+        _PaginationButton(
+          onPressed: () => controller.goToPage(0),
+          label: '1',
+          isActive: currentPage == 0,
+        ),
+      );
+
+      if (currentPage > 2) {
+        widgets.add(
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 2),
+            child: Text('...', style: TextStyle(color: Colors.white70)),
+          ),
+        );
+      }
+
+      final start = math.max(1, currentPage - 1);
+      final end = math.min(totalPages - 2, currentPage + 1);
+
+      for (int i = start; i <= end; i++) {
+        widgets.add(
+          _PaginationButton(
+            onPressed: () => controller.goToPage(i),
+            label: '${i + 1}',
+            isActive: i == currentPage,
+          ),
+        );
+      }
+
+      if (currentPage < totalPages - 3) {
+        widgets.add(
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 2),
+            child: Text('...', style: TextStyle(color: Colors.white70)),
+          ),
+        );
+      }
+
+      widgets.add(
+        _PaginationButton(
+          onPressed: () => controller.goToPage(totalPages - 1),
+          label: '$totalPages',
+          isActive: currentPage == totalPages - 1,
+        ),
+      );
     }
-    if (_genreSelected.length != _allGenres.length) {
-      _genreSelected = List<bool>.filled(_allGenres.length, false);
-    }
+
+    return widgets;
   }
 
   @override
   Widget build(BuildContext context) {
-    final mv = widget.movie;
-    final selectedNavIndex = ref.watch(bottomNavIndexProvider);
+    final state = ref.watch(tickControllerProvider);
+    final controller = ref.read(tickControllerProvider.notifier);
+    final selectedRegion = ref.watch(selectedRegionProvider);
 
-    _ensureFiltersReady();
+    ref.listen(bottomNavIndexProvider, (previous, next) {
+      if (next == 2) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _searchFocusNode.unfocus();
+          _searchTextController.clear();
+          controller.closeSearchSuggestions();
+        });
+      }
+    });
+
     return Scaffold(
-      key: _scaffoldKey,
       drawerEnableOpenDragGesture: false,
       drawer: SizedBox(
         width: MediaQuery.of(context).size.width * 0.9,
         child: FilterSheetWidget(
-          allLanguages: _availableLanguages,
-          allExperiences: _allExperiences,
-          allGenres: _allGenres,
-          langSelected: _langSelected,
-          xpSelected: _xpSelected,
-          genreSelected: _genreSelected,
+          allLanguages: state.availableLanguages,
+          allExperiences: controller.allExperiences,
+          allGenres: controller.allGenres,
+          langSelected: state.langSelected,
+          xpSelected: state.xpSelected,
+          genreSelected: state.genreSelected,
           onApply: () {
-            Navigator.of(context).maybePop();
-            setState(() {});
+            Navigator.pop(context);
           },
           onClear: () {
-            setState(() {
-              for (var i = 0; i < _langSelected.length; i++)
-                _langSelected[i] = false;
-              for (var i = 0; i < _xpSelected.length; i++)
-                _xpSelected[i] = false;
-              for (var i = 0; i < _genreSelected.length; i++)
-                _genreSelected[i] = false;
-            });
+            Navigator.pop(context);
           },
         ),
       ),
@@ -279,73 +208,41 @@ class _TickScreenState extends ConsumerState<TickScreen> {
           child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
+              const SliverToBoxAdapter(child: CustomAppBar()),
               SliverPersistentHeader(
                 pinned: true,
-                delegate: _StickyHeaderDelegate(
-                  title: widget.movie?['title'] ?? 'Movies',
-                  rating: widget.movie?['vote_average'] ?? 'N/A',
-                  generatedDates: _generatedDates,
-                  selectedDateIndex: selectedDateIndex,
-                  onDateSelected: (index) {
-                    setState(() {
-                      selectedDateIndex = index;
-                    });
-                    _fetchMovies();
-                  },
-                  langList: _availableLanguages,
-                  selectedLangIndex: selectedLangIndex,
-                  onLangSelected: (index) {
-                    setState(() {
-                      selectedLangIndex = index;
-                    });
-                  },
-                  onFilterTap: () {
-                    _scaffoldKey.currentState?.openDrawer();
-                  },
-                  movies: _movies,
-                  selectedInfoIndex: selectedInfoIndex,
-                  onInfoIndexChanged: (index) {
-                    setState(() {
-                      selectedInfoIndex = index;
-                    });
-                  },
-                  searchQuery: _searchQuery,
-                  onSearchChanged: (query) {
-                    setState(() {
-                      _searchQuery = query;
-                    });
-                  },
-                  userPosition: _userPosition,
-                  onCalculateDistance: _calculateDistance,
+                delegate: StickyHeader(
+                  state: state,
+                  controller: controller,
+                  searchFocusNode: _searchFocusNode,
+                  searchTextController: _searchTextController,
+                  selectedRegion: selectedRegion,
                 ),
               ),
-              if (_isLoading)
+              if (state.isLoading)
                 const SliverToBoxAdapter(
                   child: Center(
                     child: Padding(
-                      padding: EdgeInsets.all(32.0),
+                      padding: EdgeInsets.all(32),
                       child: CircularProgressIndicator(),
                     ),
                   ),
                 )
-              else if (_errorMessage != null)
-                SliverToBoxAdapter(
+              else if (state.errorMessage != null)
+                const SliverToBoxAdapter(
                   child: Center(
                     child: Padding(
-                      padding: const EdgeInsets.all(32.0),
+                      padding: EdgeInsets.all(32),
                       child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(
-                            Icons.error_outline,
-                            color: Colors.red,
-                            size: 48,
-                          ),
-                          const SizedBox(height: 16),
+                          Icon(Icons.wifi_off, color: Colors.white30, size: 48),
+                          SizedBox(height: 16),
                           Text(
-                            _errorMessage!,
+                            'Check your connectivity',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.red,
+                            style: TextStyle(
+                              color: Colors.white70,
                               fontSize: 16,
                             ),
                           ),
@@ -354,7 +251,7 @@ class _TickScreenState extends ConsumerState<TickScreen> {
                     ),
                   ),
                 )
-              else if (_movies.isEmpty)
+              else if (controller.sortedMovies().isEmpty)
                 const SliverToBoxAdapter(
                   child: Center(
                     child: Padding(
@@ -368,7 +265,7 @@ class _TickScreenState extends ConsumerState<TickScreen> {
                           ),
                           SizedBox(height: 16),
                           Text(
-                            'No movies available',
+                            'No showtimes available',
                             style: TextStyle(
                               color: Colors.white70,
                               fontSize: 16,
@@ -380,827 +277,183 @@ class _TickScreenState extends ConsumerState<TickScreen> {
                   ),
                 )
               else
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      if (_generatedDates.isEmpty) {
-                        return const SizedBox.shrink();
-                      }
+                Builder(
+                  builder: (context) {
+                    final allMovies = controller.sortedMovies();
+                    final moviesWithFutureShowtimes =
+                        allMovies
+                            .where(
+                              (movie) =>
+                                  _hasAnyFutureShowtime(movie, selectedRegion),
+                            )
+                            .toList();
 
-                      final safeIndex =
-                          selectedDateIndex >= _generatedDates.length
-                              ? 0
-                              : selectedDateIndex;
-                      final selectedDate =
-                          _generatedDates[safeIndex]['dateStr'];
-                      final selectedLanguage =
-                          selectedLangIndex == -1 ||
-                                  selectedLangIndex >=
-                                      _availableLanguages.length
-                              ? null
-                              : _availableLanguages[selectedLangIndex];
-
-                      List<Map<String, dynamic>> filtered =
-                          _movies.where((movie) {
-                            if (selectedLanguage != null) {
-                              final language =
-                                  movie['language'] as String? ?? '';
-                              if (!language.toLowerCase().contains(
-                                selectedLanguage.toLowerCase(),
-                              )) {
-                                return false;
-                              }
-                            }
-
-                            if (_searchQuery.isNotEmpty) {
-                              final title =
-                                  (movie['movieTitle'] as String? ?? '')
-                                      .toLowerCase();
-                              if (!title.contains(_searchQuery.toLowerCase())) {
-                                return false;
-                              }
-                            }
-
-                            return true;
-                          }).toList();
-
-                      if (selectedInfoIndex == 0) {
-                        filtered.sort((a, b) {
-                          final priceA =
-                              (a['minPrice'] as num?)?.toDouble() ??
-                              double.maxFinite;
-                          final priceB =
-                              (b['minPrice'] as num?)?.toDouble() ??
-                              double.maxFinite;
-                          return priceA.compareTo(priceB);
-                        });
-                      } else if (selectedInfoIndex == 1) {
-                        filtered.sort((a, b) {
-                          final availA = _getMaxAvailability(a);
-                          final availB = _getMaxAvailability(b);
-                          return availB.compareTo(availA);
-                        });
-                      } else if (selectedInfoIndex == 2) {
-                        if (_userPosition != null) {
-                          filtered.sort((a, b) {
-                            final cinemaLatA =
-                                (a['latitude'] as num?)?.toDouble() ?? 0;
-                            final cinemaLonA =
-                                (a['longitude'] as num?)?.toDouble() ?? 0;
-                            final cinemaLatB =
-                                (b['latitude'] as num?)?.toDouble() ?? 0;
-                            final cinemaLonB =
-                                (b['longitude'] as num?)?.toDouble() ?? 0;
-
-                            final distA = _calculateDistance(
-                              _userPosition!.latitude,
-                              _userPosition!.longitude,
-                              cinemaLatA,
-                              cinemaLonA,
-                            );
-                            final distB = _calculateDistance(
-                              _userPosition!.latitude,
-                              _userPosition!.longitude,
-                              cinemaLatB,
-                              cinemaLonB,
-                            );
-
-                            return distA.compareTo(distB);
-                          });
-                        }
-                      } else {
-                        filtered.sort((a, b) {
-                          final ratingA = (a['rating'] as num?) ?? 0;
-                          final ratingB = (b['rating'] as num?) ?? 0;
-                          return ratingB.compareTo(ratingA);
-                        });
-                      }
-
-                      if (filtered.isEmpty) {
-                        return const Center(
+                    if (moviesWithFutureShowtimes.isEmpty) {
+                      return const SliverToBoxAdapter(
+                        child: Center(
                           child: Padding(
                             padding: EdgeInsets.all(32.0),
-                            child: Text(
-                              'No movies available',
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                        );
-                      }
-
-                      if (index >= filtered.length) {
-                        return const SizedBox.shrink();
-                      }
-
-                      final item = filtered[index];
-                      final movieIdRaw = item['movieId'];
-                      final movieId =
-                          movieIdRaw != null ? movieIdRaw.toString() : '';
-                      final title = item['movieTitle'] as String? ?? '';
-                      final posterPath = item['posterPath'] as String? ?? '';
-                      final rating = item['rating'] as num? ?? 0;
-                      final language = item['language'] as String? ?? 'N/A';
-                      final genres =
-                          (item['genres'] as List?)?.cast<String>() ?? [];
-                      final cinemaName = item['cinemaName'] as String? ?? '';
-                      final showtimes =
-                          (item['showtimes'] as List?)
-                              ?.cast<Map<String, dynamic>>() ??
-                          [];
-
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 8,
-                        ),
-                        child: GestureDetector(
-                          onTap: () {},
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              decoration: const BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    Color(0xFF5A1EA9),
-                                    Color(0xFF3A0E68),
-                                  ],
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.local_movies,
+                                  color: Colors.white30,
+                                  size: 48,
                                 ),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Container(
-                                        width: 80,
-                                        height: 120,
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.1),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child:
-                                            posterPath.isNotEmpty
-                                                ? Image.network(
-                                                  posterPath,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder:
-                                                      (
-                                                        context,
-                                                        error,
-                                                        stackTrace,
-                                                      ) => const Icon(
-                                                        Icons.local_movies,
-                                                        color: Colors.white30,
-                                                      ),
-                                                )
-                                                : const Icon(
-                                                  Icons.local_movies,
-                                                  color: Colors.white30,
-                                                  size: 40,
-                                                ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            title,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.star,
-                                                size: 14,
-                                                color: Color(0xFFFFC107),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                rating > 0
-                                                    ? '${rating.toStringAsFixed(1)}'
-                                                    : 'N/A',
-                                                style: const TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 2,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white
-                                                      .withOpacity(0.1),
-                                                  borderRadius:
-                                                      BorderRadius.circular(6),
-                                                ),
-                                                child: Text(
-                                                  language,
-                                                  style: const TextStyle(
-                                                    color: Colors.white70,
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 6),
-
-                                          Text(
-                                            cinemaName,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-
-                                          if (showtimes.isNotEmpty)
-                                            SizedBox(
-                                              height: 55,
-                                              child: ListView.builder(
-                                                scrollDirection:
-                                                    Axis.horizontal,
-                                                physics:
-                                                    const BouncingScrollPhysics(),
-                                                itemCount: showtimes.length,
-                                                itemBuilder: (context, idx) {
-                                                  final showtime =
-                                                      showtimes[idx];
-                                                  final time = _formatTime(
-                                                    showtime['time'],
-                                                  );
-                                                  final price =
-                                                      (showtime['price']
-                                                              as num?)
-                                                          ?.toDouble() ??
-                                                      0;
-
-                                                  return Padding(
-                                                    padding: EdgeInsets.only(
-                                                      right:
-                                                          idx ==
-                                                                  showtimes
-                                                                          .length -
-                                                                      1
-                                                              ? 0
-                                                              : 6,
-                                                    ),
-                                                    child: GestureDetector(
-                                                      onTap: () async {
-                                                        final url =
-                                                            showtime['bookingUrl']
-                                                                as String? ??
-                                                            '';
-                                                        if (url.isNotEmpty &&
-                                                            await canLaunchUrl(
-                                                              Uri.parse(url),
-                                                            )) {
-                                                          await launchUrl(
-                                                            Uri.parse(url),
-                                                            mode:
-                                                                LaunchMode
-                                                                    .externalApplication,
-                                                          );
-                                                        }
-                                                      },
-                                                      child: Container(
-                                                        padding:
-                                                            const EdgeInsets.symmetric(
-                                                              horizontal: 6,
-                                                              vertical: 4,
-                                                            ),
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.white
-                                                              .withOpacity(
-                                                                0.12,
-                                                              ),
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                6,
-                                                              ),
-                                                          border: Border.all(
-                                                            color: Colors.white
-                                                                .withOpacity(
-                                                                  0.2,
-                                                                ),
-                                                          ),
-                                                        ),
-                                                        child: Column(
-                                                          mainAxisAlignment:
-                                                              MainAxisAlignment
-                                                                  .center,
-                                                          crossAxisAlignment:
-                                                              CrossAxisAlignment
-                                                                  .center,
-                                                          children: [
-                                                            Text(
-                                                              time,
-                                                              style: const TextStyle(
-                                                                color:
-                                                                    Colors
-                                                                        .white,
-                                                                fontSize: 13,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w700,
-                                                              ),
-                                                            ),
-                                                            Text(
-                                                              '\$$price',
-                                                              style: const TextStyle(
-                                                                color:
-                                                                    Colors
-                                                                        .white70,
-                                                                fontSize: 9,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w500,
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
+                                SizedBox(height: 16),
+                                Text(
+                                  'No showtimes available',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 16,
+                                  ),
                                 ),
-                              ),
+                              ],
                             ),
                           ),
                         ),
                       );
-                    },
-                    childCount:
-                        _generatedDates.isEmpty
-                            ? 0
-                            : _getFilteredMovies(_movies).length,
-                  ),
+                    }
+
+                    final totalPages =
+                        (moviesWithFutureShowtimes.length / 50).ceil();
+                    final startIndex = state.currentPage * 50;
+                    final endIndex = math.min(
+                      startIndex + 50,
+                      moviesWithFutureShowtimes.length,
+                    );
+
+                    final paginatedMovies =
+                        startIndex < moviesWithFutureShowtimes.length
+                            ? moviesWithFutureShowtimes.sublist(
+                              startIndex,
+                              endIndex,
+                            )
+                            : [];
+
+                    return SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          if (index < paginatedMovies.length) {
+                            return CinemaMovieTile(
+                              movie: paginatedMovies[index],
+                              controller: controller,
+                              region: selectedRegion,
+                            );
+                          }
+                          if (index == paginatedMovies.length &&
+                              totalPages > 1) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 24,
+                              ),
+                              child: Center(
+                                child: Wrap(
+                                  spacing: 4,
+                                  runSpacing: 8,
+                                  alignment: WrapAlignment.center,
+                                  children: [
+                                    _PaginationButton(
+                                      onPressed:
+                                          state.currentPage > 0
+                                              ? () => controller.goToPage(0)
+                                              : null,
+                                      label: '«',
+                                      isActive: false,
+                                    ),
+                                    _PaginationButton(
+                                      onPressed:
+                                          state.currentPage > 0
+                                              ? () => controller.previousPage()
+                                              : null,
+                                      label: '<',
+                                      isActive: false,
+                                    ),
+                                    ..._buildPageNumbers(
+                                      state.currentPage,
+                                      totalPages,
+                                      controller,
+                                    ),
+                                    _PaginationButton(
+                                      onPressed:
+                                          state.currentPage < totalPages - 1
+                                              ? () => controller.nextPage()
+                                              : null,
+                                      label: '>',
+                                      isActive: false,
+                                    ),
+                                    _PaginationButton(
+                                      onPressed:
+                                          state.currentPage < totalPages - 1
+                                              ? () => controller.goToPage(
+                                                totalPages - 1,
+                                              )
+                                              : null,
+                                      label: '»',
+                                      isActive: false,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                          return const SizedBox();
+                        },
+                        childCount:
+                            totalPages > 1
+                                ? paginatedMovies.length + 1
+                                : paginatedMovies.length,
+                      ),
+                    );
+                  },
                 ),
-              const SliverToBoxAdapter(child: SizedBox(height: 20)),
+              const SliverToBoxAdapter(child: SizedBox(height: 10)),
             ],
           ),
         ),
       ),
     );
   }
-
-  List<Map<String, dynamic>> _getFilteredMovies(
-    List<Map<String, dynamic>> movies,
-  ) {
-    if (movies.isEmpty) return [];
-
-    final selectedLanguage =
-        selectedLangIndex == -1 ||
-                selectedLangIndex >= _availableLanguages.length
-            ? null
-            : _availableLanguages[selectedLangIndex];
-
-    List<Map<String, dynamic>> filtered =
-        movies.where((movie) {
-          if (selectedLanguage != null) {
-            final language = movie['language'] as String? ?? '';
-            if (!language.toLowerCase().contains(
-              selectedLanguage.toLowerCase(),
-            )) {
-              return false;
-            }
-          }
-
-          if (_searchQuery.isNotEmpty) {
-            final title = (movie['movieTitle'] as String? ?? '').toLowerCase();
-            if (!title.contains(_searchQuery.toLowerCase())) {
-              return false;
-            }
-          }
-
-          return true;
-        }).toList();
-
-    return filtered;
-  }
-
-  String _formatTime(String dateTimeString) {
-    try {
-      final dateTime = DateTime.parse(dateTimeString);
-      final hour = dateTime.hour.toString().padLeft(2, '0');
-      final minute = dateTime.minute.toString().padLeft(2, '0');
-      return '$hour:$minute';
-    } catch (e) {
-      return 'N/A';
-    }
-  }
-
-  int _getMaxAvailability(Map<String, dynamic> movie) {
-    final totalSeats = (movie['rawTotalSeats'] as num?)?.toInt() ?? 1;
-    final availableSeats = (movie['rawAvailableSeats'] as num?)?.toInt() ?? 0;
-    final availabilityPercentage =
-        ((availableSeats / totalSeats) * 100).toInt();
-    return availabilityPercentage;
-  }
-
-  bool _hasGenreFilter() {
-    for (var selected in _genreSelected) {
-      if (selected) return true;
-    }
-    return false;
-  }
-
-  bool _hasExperienceFilter() {
-    for (var selected in _xpSelected) {
-      if (selected) return true;
-    }
-    return false;
-  }
 }
 
-class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final String title;
-  final String rating;
-  final List<Map<String, dynamic>> generatedDates;
-  final int selectedDateIndex;
-  final Function(int) onDateSelected;
-  final List<String> langList;
-  final int selectedLangIndex;
-  final Function(int) onLangSelected;
-  final VoidCallback onFilterTap;
-  final List<Map<String, dynamic>> movies;
-  final int? selectedInfoIndex;
-  final Function(int) onInfoIndexChanged;
-  final String searchQuery;
-  final Function(String) onSearchChanged;
-  final Position? userPosition;
-  final Function(double, double, double, double) onCalculateDistance;
+class _PaginationButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final String label;
+  final bool isActive;
 
-  _StickyHeaderDelegate({
-    required this.title,
-    required this.rating,
-    required this.generatedDates,
-    required this.selectedDateIndex,
-    required this.onDateSelected,
-    required this.langList,
-    required this.selectedLangIndex,
-    required this.onLangSelected,
-    required this.onFilterTap,
-    required this.movies,
-    this.selectedInfoIndex = 0,
-    required this.onInfoIndexChanged,
-    required this.searchQuery,
-    required this.onSearchChanged,
-    required this.userPosition,
-    required this.onCalculateDistance,
+  const _PaginationButton({
+    this.onPressed,
+    required this.label,
+    required this.isActive,
   });
 
   @override
-  double get maxExtent => 340;
-
-  @override
-  double get minExtent => 340;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
-    return Container(
-      color: const Color(0xFF1A1A2E),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 12),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: TextField(
-              onChanged: onSearchChanged,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: 'Search movies...',
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: Colors.white.withOpacity(0.7),
-                ),
-                suffixIcon:
-                    searchQuery.isNotEmpty
-                        ? GestureDetector(
-                          onTap: () => onSearchChanged(''),
-                          child: Icon(
-                            Icons.close,
-                            color: Colors.white.withOpacity(0.7),
-                          ),
-                        )
-                        : null,
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.08),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-              ),
-              cursorColor: Colors.white,
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFFFF9500) : Colors.transparent,
+          border:
+              isActive
+                  ? Border.all(color: const Color(0xFFFF9500), width: 2)
+                  : Border.all(color: Colors.grey[700]!, width: 1),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isActive ? Colors.white : Colors.white70,
+              fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              fontSize: 14,
             ),
           ),
-          const SizedBox(height: 8),
-
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: SizedBox(
-              height: 70,
-              width: double.infinity,
-              child:
-                  generatedDates.isEmpty
-                      ? const Center(
-                        child: Text(
-                          'Loading dates...',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      )
-                      : ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        itemCount: generatedDates.length,
-                        itemBuilder: (context, i) {
-                          final selected = i == selectedDateIndex;
-                          final dateData = generatedDates[i];
-                          return Padding(
-                            padding: EdgeInsets.only(
-                              left: i == 0 ? 14 : 10,
-                              right: 0,
-                            ),
-                            child: GestureDetector(
-                              onTap: () => onDateSelected(i),
-                              child: Container(
-                                width: 70,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(14),
-                                  gradient:
-                                      selected
-                                          ? AppColors.filterGradient
-                                          : null,
-                                  color:
-                                      selected
-                                          ? null
-                                          : Colors.white.withOpacity(0.09),
-                                ),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      dateData['label']!,
-                                      style: TextStyle(
-                                        color: Colors.white.withOpacity(0.90),
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      dateData['num']!,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 18,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      dateData['month']!,
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8, left: 12),
-            child: SizedBox(
-              height: 32,
-              width: double.infinity,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                itemCount: langList.length + 1,
-                itemBuilder: (context, i) {
-                  if (i == 0) {
-                    final allSelected = selectedLangIndex == -1;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: GestureDetector(
-                        onTap: () => onLangSelected(-1),
-                        child: Container(
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(13),
-                            color:
-                                allSelected
-                                    ? AppColors.chipSelectedBg
-                                    : AppColors.chipUnselectedBg,
-                          ),
-                          child: Text(
-                            'All',
-                            style: TextStyle(
-                              height: 1.0,
-                              color:
-                                  allSelected
-                                      ? AppColors.chipSelectedText
-                                      : AppColors.chipUnselectedText,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-
-                  final langIdx = i - 1;
-                  final selected = langIdx == selectedLangIndex;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: GestureDetector(
-                      onTap: () => onLangSelected(langIdx),
-                      child: Container(
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(13),
-                          color:
-                              selected
-                                  ? AppColors.chipSelectedBg
-                                  : AppColors.chipUnselectedBg,
-                        ),
-                        child: Text(
-                          langList[langIdx][0].toUpperCase() +
-                              langList[langIdx].substring(1),
-                          style: TextStyle(
-                            color:
-                                selected
-                                    ? AppColors.chipSelectedText
-                                    : AppColors.chipUnselectedText,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: Builder(
-              builder: (context) {
-                num cheapestPrice = double.maxFinite;
-                int maxAvailability = 0;
-                double nearestDistance = double.maxFinite;
-
-                final filteredMovies =
-                    movies.where((movie) {
-                      if (selectedLangIndex != -1 &&
-                          selectedLangIndex < langList.length) {
-                        final language = movie['language'] as String? ?? '';
-                        if (!language.toLowerCase().contains(
-                          langList[selectedLangIndex].toLowerCase(),
-                        )) {
-                          return false;
-                        }
-                      }
-
-                      if (searchQuery.isNotEmpty) {
-                        final title =
-                            (movie['movieTitle'] as String? ?? '')
-                                .toLowerCase();
-                        if (!title.contains(searchQuery.toLowerCase())) {
-                          return false;
-                        }
-                      }
-
-                      return true;
-                    }).toList();
-
-                for (var movie in filteredMovies) {
-                  final minPrice =
-                      (movie['minPrice'] as num?)?.toDouble() ??
-                      double.maxFinite;
-                  if (minPrice < cheapestPrice) {
-                    cheapestPrice = minPrice;
-                  }
-
-                  final totalSeats =
-                      (movie['rawTotalSeats'] as num?)?.toInt() ?? 1;
-                  final availableSeats =
-                      (movie['rawAvailableSeats'] as num?)?.toInt() ?? 0;
-                  final availabilityPercentage =
-                      ((availableSeats / totalSeats) * 100).toInt();
-                  if (availabilityPercentage > maxAvailability) {
-                    maxAvailability = availabilityPercentage;
-                  }
-
-                  if (userPosition != null) {
-                    final cinemaLat =
-                        (movie['latitude'] as num?)?.toDouble() ?? 0;
-                    final cinemaLon =
-                        (movie['longitude'] as num?)?.toDouble() ?? 0;
-                    if (cinemaLat != 0 && cinemaLon != 0) {
-                      final distance = onCalculateDistance(
-                        userPosition!.latitude,
-                        userPosition!.longitude,
-                        cinemaLat,
-                        cinemaLon,
-                      );
-                      if (distance < nearestDistance) {
-                        nearestDistance = distance;
-                      }
-                    }
-                  }
-                }
-
-                return InfoRowCard(
-                  selected: selectedInfoIndex ?? 0,
-                  onChanged: (idx) => onInfoIndexChanged(idx),
-                  cheapestPrice:
-                      cheapestPrice == double.maxFinite ? 0 : cheapestPrice,
-                  availabilityPercentage: maxAvailability,
-                );
-              },
-            ),
-          ),
-        ],
+        ),
       ),
     );
-  }
-
-  @override
-  bool shouldRebuild(_StickyHeaderDelegate oldDelegate) {
-    return oldDelegate.title != title ||
-        oldDelegate.rating != rating ||
-        oldDelegate.selectedDateIndex != selectedDateIndex ||
-        oldDelegate.selectedLangIndex != selectedLangIndex ||
-        (oldDelegate.selectedInfoIndex ?? 0) != (selectedInfoIndex ?? 0) ||
-        oldDelegate.generatedDates != generatedDates ||
-        oldDelegate.movies != movies ||
-        oldDelegate.searchQuery != searchQuery;
   }
 }

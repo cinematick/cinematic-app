@@ -15,6 +15,11 @@ class SearchBarWidget extends StatefulWidget {
 
   @override
   State<SearchBarWidget> createState() => _SearchBarWidgetState();
+
+  // Static method to clear the search bar from parent widget
+  static void clearFromKey(GlobalKey<_SearchBarWidgetState> key) {
+    key.currentState?.clearSearchBar();
+  }
 }
 
 class _SearchBarWidgetState extends State<SearchBarWidget> {
@@ -50,6 +55,25 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
     }
   }
 
+  // Method to clear search bar from parent widget
+  void clearSearchBar() {
+    if (mounted) {
+      _controller.clear();
+      _focusNode.unfocus();
+      setState(() {
+        _hasText = false;
+        _isFocused = false;
+      });
+    }
+  }
+
+  // Method to focus search bar from parent widget
+  void focusSearchBar() {
+    if (mounted) {
+      _focusNode.requestFocus();
+    }
+  }
+
   @override
   void dispose() {
     _controller.removeListener(_handleTextChange);
@@ -61,45 +85,54 @@ class _SearchBarWidgetState extends State<SearchBarWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(
-          color:
-              _isFocused
-                  ? const Color(0xFFB863D7)
-                  : AppColors.accentOrange.withOpacity(0.5),
-          width: _isFocused ? 2.5 : 2,
+    return SizedBox(
+      height: 42,
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color.fromARGB(255, 25, 35, 70),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color:
+              
+                     const Color.fromARGB(255, 247, 151, 25).withOpacity(0.5),
+            width: _isFocused ? 2.5 : 2,
+          ),
         ),
-      ),
-      child: TextField(
-        controller: _controller,
-        focusNode: _focusNode,
-        style: const TextStyle(color: Colors.white),
-        decoration: InputDecoration(
-          hintText: widget.hint,
-          hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(30),
-            borderSide: const BorderSide(color: Colors.white, width: 2),
+        child: TextField(
+          controller: _controller,
+          focusNode: _focusNode,
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          minLines: 1,
+          maxLines: 1,
+          decoration: InputDecoration(
+            filled: false,
+            hintText: widget.hint,
+            hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+            prefixIcon: const Icon(Icons.search, color: Colors.white, size: 20),
+            suffixIcon:
+                _hasText
+                    ? GestureDetector(
+                      onTap: () {
+                        _controller.clear();
+                        widget.onClear?.call();
+                      },
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    )
+                    : null,
+            contentPadding: const EdgeInsets.symmetric(
+              vertical: 4,
+              horizontal: 8,
+            ),
           ),
-          prefixIcon: const Icon(Icons.search, color: Colors.white),
-          suffixIcon:
-              _hasText
-                  ? GestureDetector(
-                    onTap: () {
-                      _controller.clear();
-                      widget.onClear?.call();
-                    },
-                    child: const Icon(Icons.close, color: Colors.white),
-                  )
-                  : null,
-          contentPadding: const EdgeInsets.symmetric(
-            vertical: 10,
-            horizontal: 8,
-          ),
+          cursorColor: Colors.white,
         ),
       ),
     );

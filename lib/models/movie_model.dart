@@ -8,7 +8,7 @@ class MovieModel {
   final List<String> genres;
   final String releaseDate;
   final double popularity;
-  final String language;
+  final List<String> languages;
 
   MovieModel({
     required this.id,
@@ -20,10 +20,22 @@ class MovieModel {
     required this.genres,
     required this.releaseDate,
     required this.popularity,
-    required this.language,
+    required this.languages,
   });
 
   factory MovieModel.fromJson(Map<String, dynamic> json) {
+    final rawLanguages = json['language'];
+    List<String> languages = [];
+
+    if (rawLanguages is List) {
+      languages = List<String>.from(
+        rawLanguages.map((l) => (l ?? '').toString().toLowerCase().trim()),
+      );
+    } else if (rawLanguages != null) {
+      final lang = rawLanguages.toString().toLowerCase().trim();
+      if (lang.isNotEmpty) languages = [lang];
+    }
+
     return MovieModel(
       id: json['id']?.toString() ?? '',
       title: json['title'] ?? '',
@@ -34,7 +46,7 @@ class MovieModel {
       genres: List<String>.from(json['genres'] ?? []),
       releaseDate: json['releaseDate'] ?? '',
       popularity: (json['popularity'] as num?)?.toDouble() ?? 0.0,
-      language: json['language'] ?? 'unknown',
+      languages: languages.isNotEmpty ? languages : ['unknown'],
     );
   }
 
@@ -49,7 +61,7 @@ class MovieModel {
       'genres': genres,
       'releaseDate': releaseDate,
       'popularity': popularity,
-      'language': language,
+      'languages': languages,
     };
   }
 

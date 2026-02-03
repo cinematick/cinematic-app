@@ -1,5 +1,4 @@
 import 'package:cinematick/views/cinema/cinema_screen.dart';
-import 'package:cinematick/views/cinema/cinema_locations_screen.dart';
 import 'package:cinematick/views/tick/tick_screen.dart';
 import 'package:cinematick/providers/navigation_providers.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +7,8 @@ import '../../widgets/custom_bottom_nav.dart';
 import '../../widgets/app_colors.dart';
 import '../home/home_screen.dart';
 import '../show_time_screen.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class BottomNavScreen extends ConsumerWidget {
   const BottomNavScreen({super.key});
@@ -28,9 +29,7 @@ class BottomNavScreen extends ConsumerWidget {
         selectedLocation,
         selectedMovie,
       ),
-      const TickScreen(tmdbId: '83533',
-        
-      ),
+      const TickScreen(tmdbId: '83533'),
       const Center(
         child: Text('Profile', style: TextStyle(color: AppColors.bottomNav)),
       ),
@@ -60,6 +59,13 @@ class BottomNavScreen extends ConsumerWidget {
         bottomNavigationBar: CustomBottomNav(
           currentIndex: selectedIndex,
           onTap: (i) {
+            // Close any open modals using the navigator key
+            if (navigatorKey.currentState != null) {
+              while (navigatorKey.currentState!.canPop()) {
+                navigatorKey.currentState!.pop();
+              }
+            }
+
             ref.read(bottomNavIndexProvider.notifier).state = i;
             if (i != 1) {
               ref.read(selectedCinemaChainProvider.notifier).state = null;
@@ -79,6 +85,8 @@ class BottomNavScreen extends ConsumerWidget {
     dynamic selectedLocation,
     String? selectedMovie,
   ) {
+    final selectedRegion = ref.watch(selectedRegionProvider);
+
     if (selectedMovie != null) {
       return ShowTimeScreen(
         movie: {
@@ -89,22 +97,7 @@ class BottomNavScreen extends ConsumerWidget {
           ref.read(selectedMovieTitleProvider.notifier).state = null;
         },
         tmdbId: '',
-      );
-    } else if (selectedChain != null) {
-      return CinemaLocationsScreen(
-        chainName: selectedChain.name,
-        chainId: selectedChain.id,
-        chainCount: selectedChain.count,
-        onLocationSelected: (name, address, cinemaId) {
-          ref.read(selectedCinemaLocationProvider.notifier).state = (
-            name: name,
-            address: address,
-            cinemaId: cinemaId,
-          );
-        },
-        onBackPressed: () {
-          ref.read(selectedCinemaChainProvider.notifier).state = null;
-        },
+        location: selectedRegion,
       );
     } else {
       return CinemaScreen(
@@ -115,6 +108,7 @@ class BottomNavScreen extends ConsumerWidget {
             count: count,
           );
         },
+        location: selectedRegion,
       );
     }
   }

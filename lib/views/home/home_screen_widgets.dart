@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../widgets/app_colors.dart';
-import 'home_screen_controller.dart';
+import 'home_controller.dart';
 
 class HomeScreenWidgets {
   static Widget tabChip(
@@ -20,10 +20,7 @@ class HomeScreenWidgets {
         decoration: BoxDecoration(
           color: selected ? AppColors.orange : AppColors.tabUnselectedBg,
           borderRadius: BorderRadius.circular(12),
-          border:
-              selected
-                  ? null
-                  : Border.all(color: AppColors.borderWhite10, width: 1),
+          border: selected ? null : Border.all(color: AppColors.borderWhite10),
           boxShadow:
               selected
                   ? [
@@ -85,10 +82,9 @@ class HomeScreenWidgets {
       child: Text(
         label[0].toUpperCase() + label.substring(1),
         maxLines: 1,
-        softWrap: false,
         overflow: TextOverflow.fade,
         style: TextStyle(
-          height: 1.0,
+          height: 1,
           color:
               selected
                   ? AppColors.chipSelectedText
@@ -108,8 +104,8 @@ class HomeScreenWidgets {
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = constraints.maxWidth;
-        late double fontSize;
-        late double iconSize;
+        double fontSize;
+        double iconSize;
 
         if (screenWidth > 1200) {
           fontSize = 18;
@@ -127,7 +123,9 @@ class HomeScreenWidgets {
           children: [
             Row(
               children: [
-                Icon(icon, color: AppColors.white, size: iconSize),
+                title == 'Trending'
+                    ? Text('🔥', style: TextStyle(fontSize: iconSize))
+                    : Icon(icon, color: Colors.white, size: iconSize),
                 const SizedBox(width: 8),
                 Text(
                   title,
@@ -148,7 +146,7 @@ class HomeScreenWidgets {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.accentOrange,
+                    color: const Color.fromARGB(255, 238, 116, 41),
                     borderRadius: BorderRadius.circular(18),
                     boxShadow: [
                       BoxShadow(
@@ -158,16 +156,15 @@ class HomeScreenWidgets {
                       ),
                     ],
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  child: const Row(
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.local_movies_outlined,
                         color: Colors.white,
                         size: 16,
                       ),
-                      const SizedBox(width: 6),
-                      const Text(
+                      SizedBox(width: 6),
+                      Text(
                         'Explore Cinema Tickets',
                         style: TextStyle(
                           color: Colors.white,
@@ -197,7 +194,7 @@ class HomeScreenWidgets {
 
     if (useCarousel) {
       return SizedBox(
-        height: 250,
+        height: 200,
         child: PageView.builder(
           controller: controller.trendingController,
           itemCount: data.length,
@@ -216,7 +213,7 @@ class HomeScreenWidgets {
     }
 
     return SizedBox(
-      height: 250,
+      height: 200,
       child:
           data.isEmpty
               ? const Center(
@@ -235,7 +232,7 @@ class HomeScreenWidgets {
                 itemCount: data.length,
                 itemBuilder:
                     (context, i) => SizedBox(
-                      width: width * 0.93,
+                      width: width * 0.98,
                       child: _buildTrendingCard(
                         context,
                         data[i],
@@ -258,11 +255,11 @@ class HomeScreenWidgets {
     Function(Map<String, dynamic>) onMovieTap,
   ) {
     final thumb = _backdropOrImage(movie).trim();
-    final safeThumb = thumb.isEmpty ? '' : thumb;
     final title = (movie['title'] ?? '').toString();
     final year = (movie['year'] ?? '').toString();
     final description = (movie['description'] ?? '').toString();
-    final rating = (movie['rating'] ?? '0').toString();
+    final rating = (double.tryParse(movie['rating']?.toString() ?? '0') ?? 0.0)
+        .toStringAsFixed(1);
     final youtubeUrl =
         (movie['youtubeUrl'] ?? movie['trailerUrl'] ?? '').toString();
 
@@ -291,7 +288,7 @@ class HomeScreenWidgets {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              posterWithBackground(safeThumb),
+              posterWithBackground(thumb),
               Positioned(
                 right: 16,
                 top: 16,
@@ -380,7 +377,6 @@ class HomeScreenWidgets {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
                       Text(
                         description,
                         maxLines: 2,
@@ -405,58 +401,27 @@ class HomeScreenWidgets {
 
   static Future<void> _launchYoutubeUrl(String url) async {
     try {
-      if (url.isEmpty) {
-        print('YouTube URL is empty');
-        return;
-      }
-
       String formattedUrl = url.trim();
-
-      if (!formattedUrl.startsWith('http://') &&
-          !formattedUrl.startsWith('https://')) {
+      if (!formattedUrl.startsWith('http')) {
         formattedUrl = 'https://$formattedUrl';
       }
 
-      print('Launching YouTube URL: $formattedUrl');
-
-      String? videoId = _extractYoutubeVideoId(formattedUrl);
-
+      final videoId = _extractYoutubeVideoId(formattedUrl);
       if (videoId != null) {
-        final youtubeAppUri = Uri.parse(
-          'youtube://www.youtube.com/watch?v=$videoId',
-        );
-
-        try {
-          if (await canLaunchUrl(youtubeAppUri)) {
-            await launchUrl(
-              youtubeAppUri,
-              mode: LaunchMode.externalApplication,
-            );
-            print('YouTube app opened successfully');
-            return;
-          }
-        } catch (e) {
-          print('YouTube app not available, trying browser: $e');
+        final appUri = Uri.parse('youtube://www.youtube.com/watch?v=$videoId');
+        if (await canLaunchUrl(appUri)) {
+          await launchUrl(appUri, mode: LaunchMode.externalApplication);
+          return;
         }
       }
 
-      final Uri webUri = Uri.parse(formattedUrl);
-
+      final webUri = Uri.parse(formattedUrl);
       if (await canLaunchUrl(webUri)) {
         await launchUrl(webUri, mode: LaunchMode.externalApplication);
-        print('Browser opened successfully');
       } else {
-        print('Cannot launch URL: $formattedUrl');
-        try {
-          await launchUrl(webUri);
-          print('URL opened with default mode');
-        } catch (e) {
-          print('Failed to launch URL: $e');
-        }
+        await launchUrl(webUri);
       }
-    } catch (e) {
-      print('Error launching YouTube URL: $e');
-    }
+    } catch (_) {}
   }
 
   static String? _extractYoutubeVideoId(String url) {
@@ -468,24 +433,21 @@ class HomeScreenWidgets {
       if (url.contains('youtu.be/')) {
         final parts = url.split('youtu.be/');
         if (parts.length > 1) {
-          final videoId = parts[1].split('?').first.split('&').first;
-          return videoId.isNotEmpty ? videoId : null;
+          return parts[1].split('?').first.split('&').first;
         }
       }
-    } catch (e) {
-      print('Error extracting video ID: $e');
-    }
+    } catch (_) {}
     return null;
   }
 
   static Widget buildTrendingIndicators(HomeScreenController controller) {
     final total = controller.trendingTop10.length;
     final useCarousel = total <= 20;
-    const maxIndicatorDots = 12;
+    const maxDots = 12;
 
     if (!useCarousel || total == 0) return const SizedBox.shrink();
 
-    if (total <= maxIndicatorDots) {
+    if (total <= maxDots) {
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(total, (i) {
@@ -507,14 +469,16 @@ class HomeScreenWidgets {
       );
     }
 
-    int start = controller.trendingPage - (maxIndicatorDots ~/ 2);
+    int start = controller.trendingPage - (maxDots ~/ 2);
     if (start < 0) start = 0;
-    int end = start + maxIndicatorDots;
+    int end = start + maxDots;
     if (end > total) {
       end = total;
-      start = end - maxIndicatorDots;
+      start = end - maxDots;
     }
+
     final window = List<int>.generate(end - start, (i) => start + i);
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -531,27 +495,44 @@ class HomeScreenWidgets {
               borderRadius: BorderRadius.circular(4),
             ),
           );
-        }).toList(),
+        }),
         if (end < total) _ellipsisDot(),
       ],
     );
   }
 
   static Widget _ellipsisDot() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: const Text(
-        '…',
-        style: TextStyle(color: Colors.white38, fontSize: 12, height: 1),
-      ),
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 4),
+      child: Text('…', style: TextStyle(color: Colors.white38, fontSize: 12)),
     );
   }
 
   static Widget buildGenericMovieGrid(
     List<Map<String, dynamic>> movies,
-    Function(Map<String, dynamic>) onMovieTap,
-  ) {
+    Function(Map<String, dynamic>) onMovieTap, {
+    String? errorMessage,
+  }) {
     if (movies.isEmpty) {
+      if (errorMessage != null) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.wifi_off, color: Colors.white30, size: 48),
+                const SizedBox(height: 16),
+                const Text(
+                  'Check your connectivity',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       return const Center(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 12),
@@ -570,46 +551,48 @@ class HomeScreenWidgets {
       builder: (context, constraints) {
         final screenWidth = constraints.maxWidth;
 
-        int crossAxisCount;
-        double childAspectRatio;
-        double mainAxisSpacing;
-        double crossAxisSpacing;
+        int crossAxis;
+        double aspect;
+        double mainSpace;
+        double crossSpace;
 
         if (screenWidth > 1200) {
-          crossAxisCount = 4;
-          childAspectRatio = 0.68;
-          mainAxisSpacing = 18;
-          crossAxisSpacing = 16;
+          crossAxis = 4;
+          aspect = 0.68;
+          mainSpace = 18;
+          crossSpace = 16;
         } else if (screenWidth > 800) {
-          crossAxisCount = 3;
-          childAspectRatio = 0.67;
-          mainAxisSpacing = 16;
-          crossAxisSpacing = 14;
+          crossAxis = 3;
+          aspect = 0.67;
+          mainSpace = 16;
+          crossSpace = 14;
         } else if (screenWidth > 480) {
-          crossAxisCount = 2;
-          childAspectRatio = 0.66;
-          mainAxisSpacing = 16;
-          crossAxisSpacing = 14;
+          crossAxis = 2;
+          aspect = 0.66;
+          mainSpace = 16;
+          crossSpace = 14;
         } else {
-          crossAxisCount = 2;
-          childAspectRatio = 0.62;
-          mainAxisSpacing = 12;
-          crossAxisSpacing = 10;
+          crossAxis = 2;
+          aspect = 0.63;
+          mainSpace = 12;
+          crossSpace = 10;
         }
 
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            mainAxisSpacing: mainAxisSpacing,
-            crossAxisSpacing: crossAxisSpacing,
-            childAspectRatio: childAspectRatio,
+            crossAxisCount: crossAxis,
+            mainAxisSpacing: mainSpace,
+            crossAxisSpacing: crossSpace,
+            childAspectRatio: aspect,
           ),
           itemCount: movies.length,
           itemBuilder: (context, index) {
             final movie = movies[index];
-            final rating = (movie['rating'] ?? '0').toString();
+            final rating =
+                (double.tryParse(movie['rating']?.toString() ?? '0') ?? 0.0)
+                    .toStringAsFixed(1);
             return _buildMovieGridItem(movie, rating, onMovieTap);
           },
         );
@@ -664,9 +647,7 @@ class HomeScreenWidgets {
                                   mode: LaunchMode.externalApplication,
                                 );
                               }
-                            } catch (e) {
-                              print('Error launching YouTube URL: $e');
-                            }
+                            } catch (_) {}
                           }
                         },
                         child: Container(
@@ -688,7 +669,7 @@ class HomeScreenWidgets {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(9.0),
+              padding: const EdgeInsets.all(9),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -728,7 +709,11 @@ class HomeScreenWidgets {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.star_border_rounded, size: 12, color: AppColors.cardStar),
+          const Icon(
+            Icons.star_border_rounded,
+            size: 12,
+            color: AppColors.cardStar,
+          ),
           const SizedBox(width: 3),
           Text(
             rating,
@@ -744,7 +729,7 @@ class HomeScreenWidgets {
   }
 
   static Widget posterWithBackground(String url, {BoxFit fit = BoxFit.cover}) {
-    final safeUrl = (url ?? '').toString().trim();
+    final safeUrl = url.trim();
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -762,7 +747,7 @@ class HomeScreenWidgets {
                     fit: fit,
                     filterQuality: FilterQuality.low,
                     loadingBuilder:
-                        (context, child, progress) =>
+                        (c, child, progress) =>
                             progress == null
                                 ? child
                                 : Container(
@@ -774,7 +759,7 @@ class HomeScreenWidgets {
                                   ),
                                 ),
                     errorBuilder:
-                        (context, error, stackTrace) => Container(
+                        (_, __, ___) => Container(
                           color: Colors.black26,
                           child: const Center(
                             child: Icon(
@@ -808,13 +793,13 @@ class HomeScreenWidgets {
     final poster = (m['posterPath'] ?? '').toString().trim();
     if (poster.isNotEmpty) return poster;
     final image = (m['image'] ?? '').toString().trim();
-    return image.isNotEmpty ? image : '';
+    return image;
   }
 
   static String _backdropOrImage(Map<String, dynamic> m) {
     final backdrop = (m['backdropPath'] ?? m['posterPath']).toString().trim();
     if (backdrop.isNotEmpty) return backdrop;
     final image = (m['image'] ?? '').toString().trim();
-    return image.isNotEmpty ? image : '';
+    return image;
   }
 }
