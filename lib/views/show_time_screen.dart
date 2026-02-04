@@ -471,6 +471,39 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
         setState(() {
           // Display all fetched showtimes
           _showtimes = processedShowtimes;
+          for (var s in processedShowtimes) {
+            // Try to get screen name from multiple sources
+            String screenName = 'Screen';
+
+            // First try: screen_name field
+            if (s['screen_name'] != null &&
+                s['screen_name'].toString().isNotEmpty) {
+              screenName = s['screen_name'].toString();
+            }
+            // Second try: screen object name field
+            else if (s['screen'] is Map) {
+              final screenName_ = s['screen']['name'];
+              if (screenName_ != null && screenName_.toString().isNotEmpty) {
+                screenName = screenName_.toString();
+              }
+            }
+            // Third try: first seat type from seats array
+            if (screenName == 'Screen' && s['seats'] is List) {
+              final seats = s['seats'] as List;
+              if (seats.isNotEmpty && seats.first is Map) {
+                final firstSeatType = seats.first['type'];
+                if (firstSeatType != null &&
+                    firstSeatType.toString().isNotEmpty) {
+                  final seatType = firstSeatType.toString();
+                  screenName =
+                      seatType[0].toUpperCase() + seatType.substring(1);
+                }
+              }
+            }
+
+            s['screen_name'] = screenName;
+          }
+
           _availableLanguages = _extractAvailableLanguages();
           _langSelected = List<bool>.filled(_availableLanguages.length, false);
           _calculateCinemaDistances();
@@ -527,7 +560,8 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
           'movie_id': movieId,
           'language': showtime['language'] ?? '',
           'screen_name':
-              showtime['screenName'] ?? showtime['screen'] ?? 'Screen',
+              showtime['screenName'] ?? showtime['screen']?['name'] ?? 'Screen',
+
           'seats': showtime['seats'] ?? [],
           'total_seats': showtime['total_seats'],
           'total_seats_available': showtime['total_seats_available'],
@@ -1714,34 +1748,26 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     }
   }
 
-  bool _hasPremiumSeats(Map<String, dynamic> showtime) {
-    // Check for premium seat types
-    final seats =
-        (showtime['seats'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    if (seats.isNotEmpty) {
-      for (var seat in seats) {
-        final seatType = (seat['type'] as String?)?.toLowerCase() ?? '';
-        if (seatType.contains('recliner') ||
-            seatType.contains('daybed') ||
-            seatType.contains('platinum') ||
-            seatType.contains('gold') ||
-            seatType.contains('vip')) {
-          return true;
-        }
-      }
-    }
+  bool _isPremiumScreen(String? screenName) {
+    if (screenName == null) return false;
 
-    // Check for premium screen types
+    final name = screenName.toLowerCase();
+
+    return name.contains('recliner') ||
+        name.contains('boutique') ||
+        name.contains('4dx') ||
+        name.contains('3d') ||
+        name.contains('gold class');
+  }
+
+  bool _hasPremiumSeats(Map<String, dynamic> showtime) {
     final screenName = (showtime['screen_name'] ?? '').toString().toLowerCase();
-    if (screenName.contains('recliner') ||
+
+    return screenName.contains('recliner') ||
         screenName.contains('boutique') ||
         screenName.contains('4dx') ||
         screenName.contains('3d') ||
-        screenName.contains('gold class')) {
-      return true;
-    }
-
-    return false;
+        screenName.contains('gold class');
   }
 
   String _getCinemaLogoPath(String chainName) {
@@ -1879,8 +1905,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                       )
                       : Builder(
                         builder: (context) {
-                        
-
                           // Create a map of original index to display info
                           final dateDisplayMap = <int, Map<String, dynamic>>{};
 

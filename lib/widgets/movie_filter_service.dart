@@ -47,6 +47,7 @@ class MovieFilterService {
     ], langList: langList);
   }
 
+
   List<Map<String, dynamic>> filterMoviesByStatus(
     List<Map<String, dynamic>> movies,
     List<bool> langSelected,

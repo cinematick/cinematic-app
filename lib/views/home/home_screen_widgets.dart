@@ -137,45 +137,7 @@ class HomeScreenWidgets {
                 ),
               ],
             ),
-            if (onButtonPressed != null)
-              GestureDetector(
-                onTap: onButtonPressed,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color.fromARGB(255, 238, 116, 41),
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.accentOrange.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Icons.local_movies_outlined,
-                        color: Colors.white,
-                        size: 16,
-                      ),
-                      SizedBox(width: 6),
-                      Text(
-                        'Explore Cinema Tickets',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            
           ],
         );
       },
@@ -593,14 +555,14 @@ class HomeScreenWidgets {
             final rating =
                 (double.tryParse(movie['rating']?.toString() ?? '0') ?? 0.0)
                     .toStringAsFixed(1);
-            return _buildMovieGridItem(movie, rating, onMovieTap);
+            return buildMovieGridItem(movie, rating, onMovieTap);
           },
         );
       },
     );
   }
 
-  static Widget _buildMovieGridItem(
+  static Widget buildMovieGridItem(
     Map<String, dynamic> movie,
     String rating,
     Function(Map<String, dynamic>) onMovieTap,

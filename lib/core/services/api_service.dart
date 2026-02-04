@@ -87,6 +87,7 @@ class ApiService {
   }) async {
     try {
       String url = '$baseUrl/movies/region/list?region=$region';
+      
       if (language != null && language.isNotEmpty) {
         url += '&language=$language';
       }

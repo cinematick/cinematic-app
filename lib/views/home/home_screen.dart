@@ -461,16 +461,17 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
         child: Row(
           children: [
             HomeScreenWidgets.tabChip(
-              'Trending',
+              'Now Playing',
               0,
-              Icons.local_fire_department,
+
+              Icons.local_movies_outlined,
               _controller.tabIndex,
               () => setState(() => _controller.setTabIndex(0)),
             ),
             HomeScreenWidgets.tabChip(
-              'Now Playing',
+              'Trending',
               1,
-              Icons.local_movies_outlined,
+              Icons.local_fire_department,
               _controller.tabIndex,
               () => setState(() => _controller.setTabIndex(1)),
             ),
@@ -571,11 +572,22 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
             final displayLanguage = displayLanguages[langIdx];
 
             // Find the index of this language in the full langList
-            final fullLangIdx = _controller.langList.indexOf(displayLanguage);
-            final selected =
-                fullLangIdx >= 0
-                    ? _controller.langSelected[fullLangIdx]
-                    : false;
+            final fullLangIdx = _controller.langList.indexWhere(
+              (l) => l.toLowerCase() == displayLanguage.toLowerCase(),
+            );
+
+            late bool selected;
+            late int actualIndex;
+
+            if (fullLangIdx >= 0) {
+              // Language exists in list
+              actualIndex = fullLangIdx;
+              selected = _controller.langSelected[fullLangIdx];
+            } else {
+              // Language not in list yet, treat as unselected
+              actualIndex = -1;
+              selected = false;
+            }
 
             final capitalizedLanguage =
                 displayLanguage[0].toUpperCase() + displayLanguage.substring(1);
@@ -584,9 +596,23 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
               padding: const EdgeInsets.only(right: 8),
               child: GestureDetector(
                 onTap: () {
-                  if (fullLangIdx >= 0) {
-                    setState(() => _controller.toggleChip(fullLangIdx));
-                  }
+                  setState(() {
+                    // Deselect all languages first
+                    for (var j = 0; j < _controller.langSelected.length; j++) {
+                      _controller.langSelected[j] = false;
+                    }
+
+                    if (actualIndex >= 0) {
+                      // Language exists in list, select only this one
+                      _controller.langSelected[actualIndex] = true;
+                    } else {
+                      // Language not in list, add it and select it
+                      _controller.langList.add(displayLanguage);
+                      _controller.langSelected = List.from(
+                        _controller.langSelected,
+                      )..add(true);
+                    }
+                  });
                 },
                 child: HomeScreenWidgets.languageChip(
                   capitalizedLanguage,
@@ -601,112 +627,114 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
   }
 
   Widget _buildTabContent() {
-    return SingleChildScrollView(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final screenWidth = constraints.maxWidth;
-          double paddingH;
-          double paddingV;
+    // 1. Determine DATA based on the selected tab
+    List<Map<String, dynamic>> activeMovieList;
+    String sectionTitle;
 
-          if (screenWidth > 1200) {
-            paddingH = 24;
-            paddingV = 4;
-          } else if (screenWidth > 800) {
-            paddingH = 16;
-            paddingV = 3;
-          } else {
-            paddingH = 8;
-            paddingV = 3;
-          }
+    if (_controller.tabIndex == 0) {
+      activeMovieList = _controller.filteredNowPlayingMovies;
+      sectionTitle = 'Now Playing';
+    } else if (_controller.tabIndex == 1) {
+      activeMovieList = _controller.filteredTrendingMoviesSortedByRating;
+      sectionTitle = 'Trending Top 20';
+    } else {
+      activeMovieList = _controller.filteredComingSoonMovies;
+      sectionTitle = 'Coming Soon';
+    }
 
-          return Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: paddingH,
-              vertical: paddingV,
+    // 2. Build the Production-Grade Scroll View
+    return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
+      slivers: [
+        // --- PART A: The Header & Carousel (Always Visible) ---
+        SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: HomeScreenWidgets.sectionHeader(
+                  'Trending',
+                  Icons.local_fire_department,
+                  onButtonPressed: _navigateToTickScreen,
+                ),
+              ),
+              const SizedBox(height: 6),
+              HomeScreenWidgets.buildTrendingCarouselOrList(
+                context,
+                _controller,
+                (page) => setState(() => _controller.setTrendingPage(page)),
+                _openShowTime,
+              ),
+              const SizedBox(height: 6),
+              HomeScreenWidgets.buildTrendingIndicators(_controller),
+              const SizedBox(height: 24), // Spacing before grid
+              // The Dynamic Title (e.g., "Now Playing")
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: HomeScreenWidgets.sectionHeader(
+                  sectionTitle,
+                  // Logic to pick icon based on tab
+                  _controller.tabIndex == 1
+                      ? Icons.local_fire_department
+                      : (_controller.tabIndex == 2
+                          ? Icons.schedule
+                          : Icons.local_movies_outlined),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
+
+        // --- PART B: The Lazy Loaded Grid (Performance Fix) ---
+        _buildSliverGrid(activeMovieList),
+
+        // --- PART C: Bottom Padding ---
+        const SliverToBoxAdapter(child: SizedBox(height: 20)),
+      ],
+    );
+  }
+
+  // Helper Widget for the Grid
+  Widget _buildSliverGrid(List<Map<String, dynamic>> movies) {
+    if (movies.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Center(
+            child: Text(
+              _controller.errorMessage ?? 'No movies match filters',
+              style: const TextStyle(color: Colors.white54),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_controller.tabIndex == -1) ...[
-                  const SizedBox(height: 6),
-                  HomeScreenWidgets.sectionHeader(
-                    'Trending',
-                    Icons.local_fire_department,
-                    onButtonPressed: _navigateToTickScreen,
-                  ),
-                  const SizedBox(height: 6),
-                  HomeScreenWidgets.buildTrendingCarouselOrList(
-                    context,
-                    _controller,
-                    (page) => setState(() => _controller.setTrendingPage(page)),
-                    _openShowTime,
-                  ),
-                  const SizedBox(height: 6),
-                  HomeScreenWidgets.buildTrendingIndicators(_controller),
-                  const SizedBox(height: 12),
-                  HomeScreenWidgets.sectionHeader(
-                    'Now Playing',
-                    Icons.local_movies_outlined,
-                  ),
-                  HomeScreenWidgets.buildGenericMovieGrid(
-                    _controller.filteredNowPlayingMovies,
-                    _openShowTime,
-                    errorMessage: _controller.errorMessage,
-                  ),
-                  const SizedBox(height: 12),
-                  HomeScreenWidgets.sectionHeader(
-                    'Coming Soon',
-                    Icons.schedule,
-                  ),
-                  HomeScreenWidgets.buildGenericMovieGrid(
-                    _controller.filteredComingSoonMovies,
-                    _openShowTime,
-                    errorMessage: _controller.errorMessage,
-                  ),
-                  const SizedBox(height: 8),
-                ] else if (_controller.tabIndex == 0) ...[
-                  const SizedBox(height: 12),
-                  HomeScreenWidgets.sectionHeader(
-                    'Trending',
-                    Icons.local_fire_department,
-                  ),
-                  const SizedBox(height: 4),
-                  HomeScreenWidgets.buildGenericMovieGrid(
-                    _controller.filteredTrendingMoviesSortedByRating,
-                    _openShowTime,
-                    errorMessage: _controller.errorMessage,
-                  ),
-                  const SizedBox(height: 8),
-                ] else if (_controller.tabIndex == 1) ...[
-                  const SizedBox(height: 12),
-                  HomeScreenWidgets.sectionHeader(
-                    'Now Playing',
-                    Icons.local_movies_outlined,
-                  ),
-                  const SizedBox(height: 4),
-                  HomeScreenWidgets.buildGenericMovieGrid(
-                    _controller.filteredNowPlayingMovies,
-                    _openShowTime,
-                    errorMessage: _controller.errorMessage,
-                  ),
-                  const SizedBox(height: 8),
-                ] else ...[
-                  const SizedBox(height: 12),
-                  HomeScreenWidgets.sectionHeader(
-                    'Coming Soon',
-                    Icons.schedule,
-                  ),
-                  const SizedBox(height: 4),
-                  HomeScreenWidgets.buildGenericMovieGrid(
-                    _controller.filteredComingSoonMovies,
-                    _openShowTime,
-                  ),
-                  const SizedBox(height: 8),
-                ],
-              ],
-            ),
+          ),
+        ),
+      );
+    }
+
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2, // Keep 2 columns for mobile
+          childAspectRatio: 0.63,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 10,
+        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final movie = movies[index];
+          final rating = (double.tryParse(movie['rating']?.toString() ?? '0') ??
+                  0.0)
+              .toStringAsFixed(1);
+
+          // Use the existing widget logic
+          return HomeScreenWidgets.buildMovieGridItem(
+            movie,
+            rating,
+            _openShowTime,
           );
-        },
+        }, childCount: movies.length),
       ),
     );
   }
@@ -825,8 +853,20 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
           (context) => RegionSelector(
             selectedRegion: _selectedRegion,
             onRegionSelected: (region) {
+              print('🔴 REGION SELECTOR CALLBACK - Selected region: $region');
+
               setState(() {
                 _selectedRegion = region;
+                // Reset language selections when region changes
+                for (var i = 0; i < _controller.langSelected.length; i++) {
+                  _controller.langSelected[i] = false;
+                }
+                // Reset tab index
+                _controller.setTabIndex(-1);
+                // Reset search state
+                _isSearching = false;
+                _searchQuery = '';
+                _searchResults = [];
               });
               // Save to cache
               _saveLocationToCache(region);
@@ -835,8 +875,11 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
                 ref.read(selectedRegionProvider.notifier).state = region;
               });
               // Refetch movies, languages, and genres for the selected region
+              print('🔴 CALLING fetchMovies with region: $region');
               _controller.fetchMovies(region: region);
+              print('🔴 CALLING fetchLanguages with region: $region');
               _controller.fetchLanguages(region: region);
+              print('🔴 CALLING fetchGenres with region: $region');
               _controller.fetchGenres(region: region);
             },
           ),

@@ -10,10 +10,11 @@ class HomeScreenController {
   late final CinemaRepository _movieRepository;
   late final MovieFilterService _filterService;
 
-  int tabIndex = -1;
+  int tabIndex = 0;
   int trendingPage = 0;
   int selectedLangIndex = 0;
   int _hintIndex = 0;
+  String currentRegion = 'NSW';
 
   List<Map<String, dynamic>> trendingMovies = [];
   List<Map<String, dynamic>> upcomingMovies = [];
@@ -93,10 +94,11 @@ class HomeScreenController {
     _startHintCycle();
   }
 
-  Future<void> fetchLanguages({String region = 'NSW'}) async {
+  Future<void> fetchLanguages({String? region}) async {
+    final finalRegion = region ?? currentRegion;
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/movies/region/list?region=$region'),
+        Uri.parse('$baseUrl/movies/region/list?region=$finalRegion'),
       );
 
       if (response.statusCode == 200) {
@@ -143,10 +145,11 @@ class HomeScreenController {
     onStateChange?.call();
   }
 
-  Future<void> fetchGenres({String region = 'NSW'}) async {
+  Future<void> fetchGenres({String? region}) async {
+    final finalRegion = region ?? currentRegion;
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/movies/region/list?region=$region'),
+        Uri.parse('$baseUrl/movies/region/list?region=$finalRegion'),
       );
 
       if (response.statusCode == 200) {
@@ -186,41 +189,62 @@ class HomeScreenController {
     onStateChange?.call();
   }
 
-  Future<void> fetchMovies({String region = 'NSW', String? language}) async {
+  Future<void> fetchMovies({String? region, String? language}) async {
+    if (region != null) {
+      currentRegion = region;
+    }
+    print('=== FETCHING MOVIES ===');
+    print('Region: $currentRegion, Language: $language');
     isLoading = true;
     errorMessage = null;
 
     try {
       trendingMovies = await _movieRepository.getMovies(
-        region: region,
+        region: currentRegion,
         language: language,
       );
+      print(
+        '✅ Fetched ${trendingMovies.length} trending movies for region: $currentRegion',
+      );
+
       upcomingMovies = await _movieRepository.getUpcomingMovies(
-        region: region,
+        region: currentRegion,
         language: language,
       );
+      print(
+        '✅ Fetched ${upcomingMovies.length} upcoming movies for region: $currentRegion',
+      );
+
       for (var movie in upcomingMovies) {
         movie['status'] = 'Upcoming';
       }
     } catch (err) {
+      print('❌ Error fetching movies: $err');
       errorMessage = 'Failed to load movies';
       trendingMovies = [];
       upcomingMovies = [];
     } finally {
       isLoading = false;
+      print('=== MOVIES FETCH COMPLETE ===');
     }
 
     onStateChange?.call();
   }
 
-  List<Map<String, dynamic>> get filteredTrendingMovies =>
-      _filterService.filterMovies(
-        trendingMovies,
-        langSelected,
-        genreSelected,
-        'Released',
-        langList: langList,
-      );
+  List<Map<String, dynamic>> get filteredTrendingMovies {
+    final filtered = _filterService.filterMovies(
+      trendingMovies,
+      langSelected,
+      genreSelected,
+      'Released',
+      langList: langList,
+    );
+    return filtered.where((movie) {
+      final regions = movie['regions'] as List?;
+      if (regions == null || regions.isEmpty) return true;
+      return regions.contains(currentRegion);
+    }).toList();
+  }
 
   List<Map<String, dynamic>> get filteredTrendingMoviesSortedByRating {
     final sorted = List<Map<String, dynamic>>.from(filteredTrendingMovies);
@@ -244,7 +268,7 @@ class HomeScreenController {
   List<Map<String, dynamic>> get filteredComingSoonMovies => upcomingMovies;
 
   List<Map<String, dynamic>> get trendingTop10 =>
-      _filterService.sortAndLimitTrendingMovies(filteredTrendingMovies, 10);
+      _filterService.sortAndLimitTrendingMovies(trendingMovies, 5);
 
   void toggleChip(int index) {
     if (index >= langList.length) return;
@@ -273,7 +297,7 @@ class HomeScreenController {
       selectedLanguageCode = _languageNameToCode(languageName);
       print('Selected language: $languageName -> Code: $selectedLanguageCode');
     }
-    fetchMovies(language: selectedLanguageCode);
+    fetchMovies(region: currentRegion, language: selectedLanguageCode);
   }
 
   String _languageNameToCode(String languageName) {
@@ -301,7 +325,9 @@ class HomeScreenController {
   }
 
   void setTabIndex(int index) {
-    tabIndex = (tabIndex == index) ? -1 : index;
+    if (tabIndex != index) {
+      tabIndex = index;
+    }
     onStateChange?.call();
   }
 

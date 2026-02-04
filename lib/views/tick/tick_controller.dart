@@ -223,7 +223,8 @@ class TickController extends StateNotifier<TickState> {
   int getMaxAvailability({String? region}) {
     int maxAvail = 0;
 
-    for (var movie in sortedMovies()) {
+    // Get all movies without premium filter for KPI calculation
+    for (var movie in _getMoviesWithoutPremium()) {
       // Skip movies with $0 price
       final price = (movie['minPrice'] as num?)?.toDouble() ?? 0.0;
       if (price == 0) {
@@ -350,7 +351,8 @@ class TickController extends StateNotifier<TickState> {
   num getCheapestPrice() {
     num cheapest = double.maxFinite;
 
-    for (var movie in filteredMovies()) {
+    // Get all movies without premium filter for KPI calculation
+    for (var movie in _getMoviesWithoutPremium()) {
       final price = (movie['minPrice'] as num?)?.toDouble() ?? double.maxFinite;
       // Skip prices that are 0 or less, only consider prices > 0
       if (price > 0 && price < cheapest) cheapest = price;
@@ -388,7 +390,7 @@ class TickController extends StateNotifier<TickState> {
     state = state.copyWith(showSearchSuggestions: true);
   }
 
-  List<Map<String, dynamic>> filteredMovies() {
+  List<Map<String, dynamic>> _getMoviesWithoutPremium() {
     final langIndex = state.selectedLangIndex;
     final lang =
         langIndex == -1 || langIndex >= state.availableLanguages.length
@@ -398,6 +400,7 @@ class TickController extends StateNotifier<TickState> {
     final q = state.searchQuery.toLowerCase();
 
     return state.movies.where((m) {
+      // 🎯 Language filter
       if (lang != null &&
           !m['language'].toString().toLowerCase().contains(
             lang.toLowerCase(),
@@ -405,24 +408,47 @@ class TickController extends StateNotifier<TickState> {
         return false;
       }
 
+      // 🔍 Search filter
       if (q.isNotEmpty) {
-        // Search by movie title
         final movieMatch = m['movieTitle'].toString().toLowerCase().contains(q);
 
-        // Search by cinema/theatre name - check multiple fields
         final cinemaName =
             (m['cinemaName'] ?? m['cinema']?['name'] ?? m['theatreName'] ?? '')
                 .toString()
                 .toLowerCase();
+
         final cinemaMatch = cinemaName.contains(q);
 
-        if (!movieMatch && !cinemaMatch) {
-          return false;
-        }
+        if (!movieMatch && !cinemaMatch) return false;
       }
 
       return true;
     }).toList();
+  }
+
+  List<Map<String, dynamic>> filteredMovies() {
+    final baseMovies = _getMoviesWithoutPremium();
+
+    // ⭐ Apply premium filter if selected (index 4)
+    if (state.selectedInfoIndex == 4) {
+      return baseMovies.where((m) {
+        final showtimes =
+            (m['showtimes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+        bool hasPremiumShowtime = false;
+        for (var showtime in showtimes) {
+          final screenName = (showtime['screen_name'] ?? '').toString();
+          if (_isPremiumScreen(screenName)) {
+            hasPremiumShowtime = true;
+            break;
+          }
+        }
+
+        return hasPremiumShowtime;
+      }).toList();
+    }
+
+    return baseMovies;
   }
 
   List<Map<String, dynamic>> sortedMovies() {
@@ -497,20 +523,26 @@ class TickController extends StateNotifier<TickState> {
         return availableMovies;
 
       case 2:
-        if (state.userPosition != null) {
-          list.sort((a, b) {
-            final dA = (a['distance'] as num?)?.toDouble() ?? double.maxFinite;
-            final dB = (b['distance'] as num?)?.toDouble() ?? double.maxFinite;
-            return dA.compareTo(dB);
-          });
-        }
-        break;
+        // Filter by premium screens (Recliner, Boutique, 4DX, 3D, Gold Class) only
+        final premiumMovies =
+            list.where((m) {
+              final showtimes =
+                  (m['showtimes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+              for (var showtime in showtimes) {
+                final screenName = (showtime['screen_name'] ?? '').toString();
+                if (_isPremiumScreen(screenName)) {
+                  return true;
+                }
+              }
+              return false;
+            }).toList();
+        return premiumMovies;
 
       case 3:
         list.sort((a, b) {
-          final ra = (a['rating'] as num?)?.toDouble() ?? 0;
-          final rb = (b['rating'] as num?)?.toDouble() ?? 0;
-          return rb.compareTo(ra);
+          final dA = (a['distance'] as num?)?.toDouble() ?? double.maxFinite;
+          final dB = (b['distance'] as num?)?.toDouble() ?? double.maxFinite;
+          return dA.compareTo(dB);
         });
         break;
     }
@@ -588,6 +620,8 @@ class TickController extends StateNotifier<TickState> {
 
   int getTotalPages() {
     final totalMovies = sortedMovies().length;
+    if (totalMovies == 0)
+      return 1; // Show at least 1 page even when empty for UI consistency
     return (totalMovies / state.itemsPerPage).ceil();
   }
 
@@ -604,11 +638,29 @@ class TickController extends StateNotifier<TickState> {
     }
   }
 
+  /// Returns true if the current filtered results are empty (no movies match current filters/language)
+  bool hasNoMovies() {
+    return sortedMovies().isEmpty;
+  }
+
   void goToPage(int page) {
     final totalPages = getTotalPages();
     if (page >= 0 && page < totalPages) {
       state = state.copyWith(currentPage: page);
     }
+  }
+
+  bool _isPremiumScreen(String? screenName) {
+    if (screenName == null) return false;
+
+    final name = screenName.toLowerCase();
+
+    return name.startsWith('recliner') ||
+        name.startsWith('boutique') ||
+        name.startsWith('4dx') ||
+        name.startsWith('3d') ||
+        name.startsWith('gold') ||
+        name.startsWith('gold class');
   }
 
   void resetPagination() {
