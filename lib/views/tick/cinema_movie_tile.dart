@@ -277,75 +277,110 @@ class CinemaMovieTile extends ConsumerWidget {
                           final url = s['bookingUrl'] ?? "";
                           final format = s['format'] ?? "Standard";
 
-                          return GestureDetector(
-                            onTap: () async {
-                              if (url.isNotEmpty &&
-                                  await canLaunchUrl(Uri.parse(url))) {
-                                launchUrl(
-                                  Uri.parse(url),
-                                  mode: LaunchMode.externalApplication,
-                                );
-                              }
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white12,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: Colors.white24),
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    _formatTime(s['time'], ref),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Flexible(
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            format,
-                                            style: const TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 10,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 2),
-                                        Text(
-                                          minPrice == 0
-                                              ? "Sold"
-                                              : "\$$minPrice",
-                                          style: TextStyle(
-                                            color:
-                                                minPrice == 0
-                                                    ? Colors.red
-                                                    : Colors.green,
-                                            fontSize: 10,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
+                          final isPremium = _isPremiumFormat(format);
+
+return GestureDetector(
+  onTap: () async {
+    if (url.isNotEmpty &&
+        await canLaunchUrl(Uri.parse(url))) {
+      launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+    }
+  },
+  child: Stack(
+    children: [
+
+      // 🎫 Showtime Box
+      Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 4,
+          vertical: 4,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white12,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color 
+                : Colors.white24,
+            width: isPremium ? 1.4 : 1,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              _formatTime(s['time'], ref),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Flexible(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      format,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Text(
+                    minPrice == 0 ? "Sold" : "\$$minPrice",
+                    style: TextStyle(
+                      color:
+                          minPrice == 0 ? Colors.red : Colors.green,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      // ⭐ PREMIUM BADGE
+    /*  if (isPremium)
+        Positioned(
+          top: 2,
+          right: 2,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 4,
+              vertical: 1,
+            ),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
+              ),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text(
+              'PREMIUM',
+              style: TextStyle(
+                fontSize: 7,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+          ),
+        ),*/
+    ],
+  ),
+);
+
                         },
                       );
                     },
@@ -388,6 +423,19 @@ class CinemaMovieTile extends ConsumerWidget {
       print('Error formatting time: $e, input: $t');
       return "N/A";
     }
+  }
+
+  bool _isPremiumFormat(String? format) {
+    if (format == null) return false;
+    final f = format.toLowerCase();
+
+    return f.contains('recliner') ||
+        f.contains('boutique') ||
+        f.contains('4dx') ||
+        f.contains('3d') ||
+        f.contains('gold') ||
+        f.contains('vip') ||
+        f.contains('premium');
   }
 
   bool _isShowtimePassed(String startTimeStr, WidgetRef ref) {

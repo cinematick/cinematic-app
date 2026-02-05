@@ -683,7 +683,7 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
               ),
               const SizedBox(height: 6),
               HomeScreenWidgets.buildTrendingIndicators(_controller),
-              const SizedBox(height: 24), // Spacing before grid
+              const SizedBox(height: 10), // Spacing before grid
               // The Dynamic Title (e.g., "Now Playing")
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),

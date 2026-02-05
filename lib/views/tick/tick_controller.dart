@@ -428,26 +428,6 @@ class TickController extends StateNotifier<TickState> {
 
   List<Map<String, dynamic>> filteredMovies() {
     final baseMovies = _getMoviesWithoutPremium();
-
-    // ⭐ Apply premium filter if selected (index 4)
-    if (state.selectedInfoIndex == 4) {
-      return baseMovies.where((m) {
-        final showtimes =
-            (m['showtimes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-
-        bool hasPremiumShowtime = false;
-        for (var showtime in showtimes) {
-          final screenName = (showtime['screen_name'] ?? '').toString();
-          if (_isPremiumScreen(screenName)) {
-            hasPremiumShowtime = true;
-            break;
-          }
-        }
-
-        return hasPremiumShowtime;
-      }).toList();
-    }
-
     return baseMovies;
   }
 
@@ -523,23 +503,28 @@ class TickController extends StateNotifier<TickState> {
         return availableMovies;
 
       case 2:
-        // Filter by premium screens using the 'format' field (Gold Class, 3D, etc.)
-        final premiumMovies =
-            list.where((m) {
-              final showtimes =
-                  (m['showtimes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-              for (var showtime in showtimes) {
-                final format = (showtime['format'] ?? '').toString();
-                if (_isPremiumScreen(format)) {
-                  return true;
-                }
-              }
-              return false;
-            }).toList();
-        print(
-          '🎬 PREMIUM FILTER: Found ${premiumMovies.length} premium movies from ${list.length} total',
-        );
-        return premiumMovies;
+  // ⭐ Premium FIRST (sorting only)
+  list.sort((a, b) {
+    final aPremiumCount =
+        ((a['showtimes'] as List?)?.where((s) {
+              final name =
+                  (s['format'] ?? s['screen_name'] ?? '').toString();
+              return _isPremiumScreen(name);
+            }).length) ??
+        0;
+
+    final bPremiumCount =
+        ((b['showtimes'] as List?)?.where((s) {
+              final name =
+                  (s['format'] ?? s['screen_name'] ?? '').toString();
+              return _isPremiumScreen(name);
+            }).length) ??
+        0;
+
+    return bPremiumCount.compareTo(aPremiumCount);
+  });
+  break;
+
 
       case 3:
         list.sort((a, b) {

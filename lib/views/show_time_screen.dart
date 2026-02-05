@@ -1565,7 +1565,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                                           ),
                                                         ),
                                                         // Premium badge
-                                                        if (_hasPremiumSeats(
+                                                        /*if (_hasPremiumSeats(
                                                           showtime,
                                                         ))
                                                           Positioned(
@@ -1607,7 +1607,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                                                 ),
                                                               ),
                                                             ),
-                                                          ),
+                                                          ),*/
                                                       ],
                                                     ),
                                                   ),
@@ -1671,11 +1671,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                     }
                                   }
 
-                                  if (selectedInfoIndex == 2) {
-                                    if (!_hasPremiumSeats(showtime)) {
-                                      return false;
-                                    }
-                                  }
+                                  
 
                                   return true;
                                 }).toList();

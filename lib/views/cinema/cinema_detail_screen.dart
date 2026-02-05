@@ -1461,13 +1461,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                                 }
                               }
 
-                              // Filter by premium seats if info index is 2
-                              if (selectedInfoIndex == 2) {
-                                if (!_hasPremiumSeats(showtime)) {
-                                  return false;
-                                }
-                              }
-
                               return true;
                             }).toList();
 
@@ -1494,16 +1487,31 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                         }
 
                         List<Map<String, dynamic>> theatreMovieList = [];
-                        for (var theatreEntry
-                            in groupedByTheatreAndMovie.entries) {
-                          for (var movieEntry in theatreEntry.value.entries) {
-                            theatreMovieList.add({
-                              'theatre_name': theatreEntry.key,
-                              'movie_title': movieEntry.key,
-                              'showtimes': movieEntry.value,
-                            });
-                          }
-                        }
+
+for (var theatreEntry in groupedByTheatreAndMovie.entries) {
+  for (var movieEntry in theatreEntry.value.entries) {
+    theatreMovieList.add({
+      'theatre_name': theatreEntry.key,
+      'movie_title': movieEntry.key,
+      'showtimes': movieEntry.value,
+    });
+  }
+}
+
+// ⭐ Premium FIRST (after list is built)
+if (selectedInfoIndex == 2) {
+  theatreMovieList.sort((a, b) {
+    final aPremium = (a['showtimes'] as List)
+        .where((s) => _hasPremiumSeats(s))
+        .length;
+
+    final bPremium = (b['showtimes'] as List)
+        .where((s) => _hasPremiumSeats(s))
+        .length;
+
+    return bPremium.compareTo(aPremium);
+  });
+}
 
                         if (_movieSearchQuery.isNotEmpty ||
                             _genreSearchQuery.isNotEmpty) {
@@ -1801,6 +1809,8 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                                           itemBuilder: (context, idx) {
                                             final showtime =
                                                 theatreShowtimes[idx];
+                                                final bool isPremium = _hasPremiumSeats(showtime);
+
                                             final seats =
                                                 (showtime['seats'] as List?)
                                                     ?.cast<
@@ -1839,7 +1849,9 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                                                   }
                                                 }
                                               },
-                                              child: Container(
+                                              child: Stack(
+                                                children: [ 
+                                                  Container(
                                                 padding: const EdgeInsets.all(
                                                   6,
                                                 ),
@@ -1911,6 +1923,8 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                                                     ),
                                                   ],
                                                 ),
+                                              ),
+                                                ],
                                               ),
                                             );
                                           },
@@ -2030,12 +2044,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                                           }
                                         }
                                         if (!hasMatchingGenre) {
-                                          return false;
-                                        }
-                                      }
-
-                                      if (selectedInfoIndex == 2) {
-                                        if (!_hasPremiumSeats(showtime)) {
                                           return false;
                                         }
                                       }

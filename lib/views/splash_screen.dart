@@ -125,18 +125,42 @@ class _SplashScreenState extends State<SplashScreen>
                 position: _slideAnimation,
                 child: Column(
                   children: [
-                    const Text(
-                      'Cinematick',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 1.5,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+
+                    children:[ShaderMask(
+            shaderCallback:
+                (bounds) => AppColors.appBarTitleGradient.createShader(
+                  Rect.fromLTWH(0, 0, bounds.width, bounds.height),
+                ),
+            child: const Text(
+              'Cinema',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 30,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          ShaderMask(
+            shaderCallback:
+                (bounds) => AppColors.appBarTickGradient.createShader(
+                  Rect.fromLTWH(0, 0, bounds.width, bounds.height),
+                ),
+            child: const Text(
+              'Tick',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 30,
+                color: Colors.white,
+              ),
+            ),
+          ),
+                    ],
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Your Cinema Companion',
+                      'Your Smart Showtimes Search',
                       style: TextStyle(
                         fontSize: 14,
                         color: Colors.white.withOpacity(0.5),
