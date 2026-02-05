@@ -60,6 +60,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
   bool _locationPermissionRequested = false;
   List<String> _availableLanguages = [];
   double _scrollOffset = 0.0;
+  bool _hasCheckedToday = false; // Track if we've already checked today
 
   final List<String> _allExperiences = ['2D', '3D', 'IMAX', 'Dolby'];
   final List<String> _allGenres = [
@@ -417,8 +418,14 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
         // If no showtimes and this is the initial load, try next date
         if (processedShowtimes.isEmpty &&
             !isAutoAdvance &&
+            !_hasCheckedToday &&
             selectedDateIndex < _generatedDates.length - 1) {
-          print('⚠️ No showtimes for $dateStr, trying next date...');
+          print(
+            '⚠️ No showtimes for $dateStr, removing today and trying next date...',
+          );
+          // Mark that we've checked today
+          _hasCheckedToday = true;
+
           setState(() {
             // Remove today's date and keep selectedDateIndex at 0 (now pointing to tomorrow)
             _generatedDates.removeAt(0);
@@ -462,7 +469,11 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
               'dateStr':
                   '${newDate.year}-${newDate.month.toString().padLeft(2, '0')}-${newDate.day.toString().padLeft(2, '0')}',
             });
+
+            _isLoading = true;
+            _errorMessage = null;
           });
+
           final nextDateStr = _generatedDates[selectedDateIndex]['dateStr'];
           await _fetchShowtimesForDate(nextDateStr, isAutoAdvance: true);
           return;
@@ -473,7 +484,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
           _showtimes = processedShowtimes;
           for (var s in processedShowtimes) {
             // Try to get screen name from multiple sources
-            String screenName = 'Screen';
+            String screenName = 'Standard';
 
             // First try: screen_name field
             if (s['screen_name'] != null &&
@@ -488,7 +499,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
               }
             }
             // Third try: first seat type from seats array
-            if (screenName == 'Screen' && s['seats'] is List) {
+            if (screenName == 'Standard' && s['seats'] is List) {
               final seats = s['seats'] as List;
               if (seats.isNotEmpty && seats.first is Map) {
                 final firstSeatType = seats.first['type'];
@@ -560,7 +571,9 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
           'movie_id': movieId,
           'language': showtime['language'] ?? '',
           'screen_name':
-              showtime['screenName'] ?? showtime['screen']?['name'] ?? 'Screen',
+              showtime['screenName'] ??
+              showtime['screen']?['name'] ??
+              'Standard',
 
           'seats': showtime['seats'] ?? [],
           'total_seats': showtime['total_seats'],
@@ -993,6 +1006,9 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                         },
                         isShowtimePassed: _isShowtimePassed,
                         groupShowtimesByDate: _groupShowtimesByDate,
+                        langSelected: _langSelected,
+                        isPremiumScreen: _isPremiumScreen,
+                        hasPremiumSeats: _hasPremiumSeats,
                       ),
                     ),
                     if (_isLoading)
@@ -1091,12 +1107,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                     }
                                   }
 
-                                  if (selectedInfoIndex == 2) {
-                                    if (!_hasPremiumSeats(showtime)) {
-                                      return false;
-                                    }
-                                  }
-
                                   return true;
                                 }).toList();
 
@@ -1111,6 +1121,14 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                               groupedByTheatre[theatreName]!.add(showtime);
                             }
 
+                            // Sort showtimes within each theatre - always sort with premium first
+                            for (var theatreName in groupedByTheatre.keys) {
+                              groupedByTheatre[theatreName] =
+                                  _sortShowtimesWithPremiumFirst(
+                                    groupedByTheatre[theatreName]!,
+                                  );
+                            }
+
                             final sortedTheatres =
                                 groupedByTheatre.entries.toList();
 
@@ -1123,6 +1141,20 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                   b.value,
                                 );
                                 return availabilityB.compareTo(availabilityA);
+                              });
+                            } else if (selectedInfoIndex == 2) {
+                              // Premium sort: theatres with more premium showtimes first
+                              sortedTheatres.sort((a, b) {
+                                final premiumCountA =
+                                    a.value
+                                        .where((s) => _hasPremiumSeats(s))
+                                        .length;
+                                final premiumCountB =
+                                    b.value
+                                        .where((s) => _hasPremiumSeats(s))
+                                        .length;
+                                // Sort descending: more premium first
+                                return premiumCountB.compareTo(premiumCountA);
                               });
                             } else if (selectedInfoIndex == 3) {
                               sortedTheatres.sort((a, b) {
@@ -1442,22 +1474,23 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                                         width: 1,
                                                       ),
                                                     ),
-                                                    child: Padding(
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                            4.0,
-                                                          ),
-                                                      child: Column(
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .center,
-                                                        children: [
-                                                          Text(
-                                                            _formatTime(
-                                                              showtime['start_time'],
-                                                            ),
-                                                            style:
-                                                                const TextStyle(
+                                                    child: Stack(
+                                                      children: [
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsets.all(
+                                                                4.0,
+                                                              ),
+                                                          child: Column(
+                                                            mainAxisAlignment:
+                                                                MainAxisAlignment
+                                                                    .center,
+                                                            children: [
+                                                              Text(
+                                                                _formatTime(
+                                                                  showtime['start_time'],
+                                                                ),
+                                                                style: const TextStyle(
                                                                   color:
                                                                       Colors
                                                                           .white,
@@ -1466,72 +1499,116 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                                                       FontWeight
                                                                           .w700,
                                                                 ),
-                                                          ),
-                                                          const SizedBox(
-                                                            height: 1,
-                                                          ),
-                                                          Row(
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .start,
-                                                            mainAxisSize:
-                                                                MainAxisSize
-                                                                    .min,
-                                                            children: [
-                                                              Flexible(
-                                                                child: Container(
-                                                                  padding:
-                                                                      const EdgeInsets.symmetric(
+                                                              ),
+                                                              const SizedBox(
+                                                                height: 1,
+                                                              ),
+                                                              Row(
+                                                                mainAxisAlignment:
+                                                                    MainAxisAlignment
+                                                                        .start,
+                                                                mainAxisSize:
+                                                                    MainAxisSize
+                                                                        .min,
+                                                                children: [
+                                                                  Flexible(
+                                                                    child: Container(
+                                                                      padding: const EdgeInsets.symmetric(
                                                                         horizontal:
                                                                             2,
                                                                       ),
-                                                                  child: Text(
-                                                                    showtime['screen_name'] ??
-                                                                        'Screen',
-                                                                    overflow:
-                                                                        TextOverflow
-                                                                            .ellipsis,
-                                                                    style: const TextStyle(
-                                                                      color:
-                                                                          Color.fromARGB(
+                                                                      child: Text(
+                                                                        showtime['screen_name'] ??
+                                                                            'Screen',
+                                                                        overflow:
+                                                                            TextOverflow.ellipsis,
+                                                                        style: const TextStyle(
+                                                                          color: Color.fromARGB(
                                                                             255,
                                                                             252,
                                                                             252,
                                                                             253,
                                                                           ),
+                                                                          fontSize:
+                                                                              7,
+                                                                          fontWeight:
+                                                                              FontWeight.w600,
+                                                                        ),
+                                                                      ),
+                                                                    ),
+                                                                  ),
+                                                                  const SizedBox(
+                                                                    width: 4,
+                                                                  ),
+                                                                  Text(
+                                                                    minPrice ==
+                                                                            0
+                                                                        ? 'Sold'
+                                                                        : '\$$minPrice',
+                                                                    style: const TextStyle(
+                                                                      color:
+                                                                          Colors
+                                                                              .white,
                                                                       fontSize:
-                                                                          7,
+                                                                          10,
                                                                       fontWeight:
                                                                           FontWeight
                                                                               .w600,
                                                                     ),
                                                                   ),
-                                                                ),
+                                                                ],
                                                               ),
                                                               const SizedBox(
-                                                                width: 4,
-                                                              ),
-                                                              Text(
-                                                                minPrice == 0
-                                                                    ? 'Sold'
-                                                                    : '\$$minPrice',
-                                                                style: const TextStyle(
-                                                                  color:
-                                                                      Colors
-                                                                          .white,
-                                                                  fontSize: 10,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600,
-                                                                ),
+                                                                height: 6,
                                                               ),
                                                             ],
                                                           ),
-                                                          const SizedBox(
-                                                            height: 6,
+                                                        ),
+                                                        // Premium badge
+                                                        if (_hasPremiumSeats(
+                                                          showtime,
+                                                        ))
+                                                          Positioned(
+                                                            top: 2,
+                                                            right: 2,
+                                                            child: Container(
+                                                              padding:
+                                                                  const EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        4,
+                                                                    vertical: 1,
+                                                                  ),
+                                                              decoration: BoxDecoration(
+                                                                gradient: const LinearGradient(
+                                                                  colors: [
+                                                                    Color(
+                                                                      0xFFFFD700,
+                                                                    ),
+                                                                    Color(
+                                                                      0xFFFFA500,
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      3,
+                                                                    ),
+                                                              ),
+                                                              child: const Text(
+                                                                'PREMIUM',
+                                                                style: TextStyle(
+                                                                  color:
+                                                                      Colors
+                                                                          .black,
+                                                                  fontSize: 5,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w700,
+                                                                ),
+                                                              ),
+                                                            ),
                                                           ),
-                                                        ],
-                                                      ),
+                                                      ],
                                                     ),
                                                   ),
                                                 );
@@ -1770,6 +1847,36 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
         screenName.contains('gold class');
   }
 
+  List<Map<String, dynamic>> _sortShowtimesWithPremiumFirst(
+    List<Map<String, dynamic>> showtimes,
+  ) {
+    // Sort showtimes so premium ones come first if they exist
+    final sorted = [...showtimes];
+
+    // Check if there are any premium showtimes
+    final hasPremiumShowtimes = sorted.any(
+      (showtime) => _hasPremiumSeats(showtime),
+    );
+
+    // Only sort if there are premium showtimes, otherwise return original order
+    if (!hasPremiumShowtimes) {
+      return sorted;
+    }
+
+    sorted.sort((a, b) {
+      final aIsPremium = _hasPremiumSeats(a);
+      final bIsPremium = _hasPremiumSeats(b);
+
+      // Premium showtimes come first
+      if (aIsPremium && !bIsPremium) return -1;
+      if (!aIsPremium && bIsPremium) return 1;
+
+      // If both are premium or both are regular, maintain original order
+      return 0;
+    });
+    return sorted;
+  }
+
   String _getCinemaLogoPath(String chainName) {
     final nameLower = chainName.toLowerCase().trim();
     final normalized = nameLower.replaceAll(' ', '').replaceAll('-', '');
@@ -1816,6 +1923,9 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
   final Function(int) onInfoIndexChanged;
   final Function(String) isShowtimePassed;
   final Function(List<Map<String, dynamic>>) groupShowtimesByDate;
+  final List<bool> langSelected;
+  final bool Function(String?) isPremiumScreen;
+  final bool Function(Map<String, dynamic>) hasPremiumSeats;
 
   _StickyHeaderDelegate({
     required this.title,
@@ -1832,13 +1942,42 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.onInfoIndexChanged,
     required this.isShowtimePassed,
     required this.groupShowtimesByDate,
+    required this.langSelected,
+    required this.isPremiumScreen,
+    required this.hasPremiumSeats,
   });
 
-  @override
-  double get maxExtent => 245;
+  double _calculateTitleHeight(double maxWidth) {
+    final titlePainter = TextPainter(
+      text: TextSpan(
+        text: title,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 24,
+          letterSpacing: 1,
+          height: 1.2,
+        ),
+      ),
+      maxLines: 2,
+      textDirection: TextDirection.ltr,
+    );
+    titlePainter.layout(maxWidth: maxWidth - 24); // 24 = 12+12 padding
+    return titlePainter.height;
+  }
 
   @override
-  double get minExtent => 245;
+  double get maxExtent {
+    final titleHeight = _calculateTitleHeight(390); // approximate screen width
+    return 16 + titleHeight + 4 + 20 + 8 + 55 + 14 + 24 + 14 + 50 + 4;
+  }
+
+  @override
+  double get minExtent {
+    // Same as maxExtent to avoid collapsing
+    final titleHeight = _calculateTitleHeight(390);
+    return 16 + titleHeight + 4 + 20 + 8 + 55 + 14 + 24 + 14 + 50 + 4;
+  }
 
   @override
   Widget build(
@@ -2085,8 +2224,48 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
             child: Builder(
               builder: (context) {
+                // Get filtered showtimes based on selected date and language
+                final groupedByDate = groupShowtimesByDate(showtimes);
+                final safeIndex =
+                    selectedDateIndex >= generatedDates.length
+                        ? 0
+                        : selectedDateIndex;
+                final selectedDateStr = generatedDates[safeIndex]['dateStr'];
+                var showtimesForDate = groupedByDate[selectedDateStr] ?? [];
+
+                // Apply language filter
+                final selectedLanguage =
+                    selectedLangIndex == -1 ||
+                            selectedLangIndex >= langList.length
+                        ? null
+                        : langList[selectedLangIndex];
+
+                final filteredShowtimes =
+                    showtimesForDate.where((showtime) {
+                      // Filter out past showtimes
+                      final startTimeStr =
+                          showtime['start_time']?.toString() ?? '';
+                      if (startTimeStr.isNotEmpty) {
+                        if (isShowtimePassed(startTimeStr)) {
+                          return false;
+                        }
+                      }
+
+                      // Filter by language
+                      if (selectedLanguage != null) {
+                        final language = showtime['language'] ?? '';
+                        if (!language.toString().toLowerCase().contains(
+                          selectedLanguage.toLowerCase(),
+                        )) {
+                          return false;
+                        }
+                      }
+
+                      return true;
+                    }).toList();
+
                 num cheapestPrice = double.maxFinite;
-                for (var showtime in showtimes) {
+                for (var showtime in filteredShowtimes) {
                   final seats =
                       (showtime['seats'] as List?)
                           ?.cast<Map<String, dynamic>>() ??
@@ -2095,14 +2274,15 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                     final price = seats
                         .map((s) => s['price'] as num)
                         .reduce((a, b) => a < b ? a : b);
-                    if (price < cheapestPrice) {
+                    // Only consider prices greater than 0
+                    if (price > 0 && price < cheapestPrice) {
                       cheapestPrice = price;
                     }
                   }
                 }
 
                 int maxAvailability = 0;
-                for (var showtime in showtimes) {
+                for (var showtime in filteredShowtimes) {
                   final availableSeats =
                       (showtime['total_seats_available'] as num?)?.toInt() ?? 0;
                   final totalSeats =
@@ -2139,6 +2319,7 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
         oldDelegate.selectedLangIndex != selectedLangIndex ||
         (oldDelegate.selectedInfoIndex ?? 0) != (selectedInfoIndex ?? 0) ||
         oldDelegate.generatedDates != generatedDates ||
-        oldDelegate.showtimes != showtimes;
+        oldDelegate.showtimes != showtimes ||
+        oldDelegate.langSelected != langSelected;
   }
 }

@@ -111,8 +111,13 @@ class RegionSelector extends StatelessWidget {
 
                 return GestureDetector(
                   onTap: () {
-                    onRegionSelected(regionAbbreviations[region] ?? region);
+                    print('🔴 RegionSelector - Tapped region: $region');
+                    final regionCode = regionAbbreviations[region] ?? region;
+                    print('🔴 RegionSelector - Region code: $regionCode');
+                    onRegionSelected(regionCode);
+                    print('🔴 RegionSelector - onRegionSelected() called');
                     Navigator.pop(context);
+                    print('🔴 RegionSelector - Navigator.pop() called');
                   },
                   child: Container(
                     decoration: BoxDecoration(

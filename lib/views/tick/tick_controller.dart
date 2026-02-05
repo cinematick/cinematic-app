@@ -523,19 +523,22 @@ class TickController extends StateNotifier<TickState> {
         return availableMovies;
 
       case 2:
-        // Filter by premium screens (Recliner, Boutique, 4DX, 3D, Gold Class) only
+        // Filter by premium screens using the 'format' field (Gold Class, 3D, etc.)
         final premiumMovies =
             list.where((m) {
               final showtimes =
                   (m['showtimes'] as List?)?.cast<Map<String, dynamic>>() ?? [];
               for (var showtime in showtimes) {
-                final screenName = (showtime['screen_name'] ?? '').toString();
-                if (_isPremiumScreen(screenName)) {
+                final format = (showtime['format'] ?? '').toString();
+                if (_isPremiumScreen(format)) {
                   return true;
                 }
               }
               return false;
             }).toList();
+        print(
+          '🎬 PREMIUM FILTER: Found ${premiumMovies.length} premium movies from ${list.length} total',
+        );
         return premiumMovies;
 
       case 3:
@@ -651,16 +654,17 @@ class TickController extends StateNotifier<TickState> {
   }
 
   bool _isPremiumScreen(String? screenName) {
-    if (screenName == null) return false;
+    if (screenName == null || screenName.isEmpty) return false;
 
-    final name = screenName.toLowerCase();
+    final name = screenName.toLowerCase().trim();
 
+    // Check if it starts with any premium screen type
     return name.startsWith('recliner') ||
         name.startsWith('boutique') ||
         name.startsWith('4dx') ||
         name.startsWith('3d') ||
-        name.startsWith('gold') ||
-        name.startsWith('gold class');
+        name.startsWith('gold') || // Catches "gold class", "gold class 1", etc.
+        name.startsWith('premium');
   }
 
   void resetPagination() {

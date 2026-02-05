@@ -53,7 +53,7 @@ class CustomBottomNav extends StatelessWidget {
             _navItem(Icons.home_outlined, 'Home', 0),
             _navItem(Icons.local_movies_outlined, 'Cinema', 1),
             _navItem(Icons.task_alt_outlined, 'Tick', 2),
-            _navItem(Icons.person_outline, 'Profile', 3),
+            _navItem(Icons.info_outline, 'About', 3),
           ],
         ),
       ),

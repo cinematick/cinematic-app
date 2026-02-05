@@ -1,3 +1,4 @@
+import 'package:cinematick/views/about/about_screen.dart';
 import 'package:cinematick/views/cinema/cinema_screen.dart';
 import 'package:cinematick/views/tick/tick_screen.dart';
 import 'package:cinematick/providers/navigation_providers.dart';
@@ -30,9 +31,7 @@ class BottomNavScreen extends ConsumerWidget {
         selectedMovie,
       ),
       const TickScreen(tmdbId: '83533'),
-      const Center(
-        child: Text('Profile', style: TextStyle(color: AppColors.bottomNav)),
-      ),
+      const AboutScreen(),
     ];
 
     return WillPopScope(

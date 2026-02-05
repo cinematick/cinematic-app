@@ -1,7 +1,8 @@
+import 'package:cinematick/views/navigation/bottom_nav_screen.dart';
+import 'package:cinematick/views/splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:device_preview/device_preview.dart';
-import 'views/navigation/bottom_nav_screen.dart';
 import 'package:timezone/data/latest.dart' as tz;
 
 void main() async {
@@ -25,7 +26,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'CinemaTick',
       theme: ThemeData(useMaterial3: true, primarySwatch: Colors.blue),
-      home: const BottomNavScreen(),
+      home: const SplashScreen(),
       debugShowCheckedModeBanner: false,
       useInheritedMediaQuery: true,
       builder: DevicePreview.appBuilder,

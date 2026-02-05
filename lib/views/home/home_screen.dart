@@ -54,6 +54,20 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
 
   @override
   Widget build(BuildContext context) {
+    // Listen for region changes from Riverpod provider and refetch movies
+    ref.listen(selectedRegionProvider, (previous, next) {
+      if (previous != null && previous != next) {
+        print(
+          '🟡 HOME SCREEN: Riverpod region changed from $previous to $next',
+        );
+        print('🟡 HOME SCREEN: Refetching movies for region: $next');
+        _controller.currentRegion = next;
+        _controller.fetchMovies(region: next);
+        _controller.fetchLanguages(region: next);
+        _controller.fetchGenres(region: next);
+      }
+    });
+
     ref.listen(bottomNavIndexProvider, (previous, next) {
       if (previous != null && previous != 0 && next == 0) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -636,7 +650,7 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
       sectionTitle = 'Now Playing';
     } else if (_controller.tabIndex == 1) {
       activeMovieList = _controller.filteredTrendingMoviesSortedByRating;
-      sectionTitle = 'Trending Top 20';
+      sectionTitle = 'Trending';
     } else {
       activeMovieList = _controller.filteredComingSoonMovies;
       sectionTitle = 'Coming Soon';
@@ -779,44 +793,24 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
   }
 
   void _openShowTime(Map<String, dynamic> movie) {
-    final safe = Map<String, String>.fromEntries(
-      movie.entries.map((e) => MapEntry(e.key, e.value?.toString() ?? '')),
-    );
-
-    final backdropPath =
-        (movie['backdropPath']?.toString().isNotEmpty == true
-                        ? movie['backdropPath']
-                        : movie['backdrop'])
-                    ?.toString()
-                    .isNotEmpty ==
-                true
-            ? movie['backdropPath'] ?? movie['backdrop']
-            : movie['image']?.toString().isNotEmpty == true
-            ? movie['image']
-            : movie['posterPath'] ?? '';
-
-    Navigator.of(context)
-        .push(
-          MaterialPageRoute(
-            builder:
-                (_) => ShowTimeScreen(
-                  movie: safe,
-                  tmdbId: movie['tmdbId']?.toString() ?? '',
-                  backdropPath: backdropPath.toString(),
-                  location: _selectedRegion,
-                ),
-          ),
-        )
-        .then((_) {
-          // Clear search bar when returning from ShowTimeScreen
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              (_searchBarKey.currentState as dynamic)?.clearSearchBar();
-              _resetSearchState();
-            }
-          });
-        });
-  }
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => ShowTimeScreen(
+        movie: Map<String, String>.from(
+          movie.map((k, v) => MapEntry(k, v?.toString() ?? '')),
+        ),
+        tmdbId: movie['tmdbId']?.toString() ?? '',
+        backdropPath:
+            movie['backdropPath']?.toString() ??
+            movie['posterPath']?.toString() ??
+            movie['image']?.toString() ??
+            '',
+        location: _selectedRegion,
+      ),
+    ),
+  );
+}
 
   void _navigateToCinemaDetail(Map<String, dynamic> cinema) {
     Navigator.of(context)
@@ -846,13 +840,14 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
   }
 
   void _showRegionSelector() {
+    print('🔴 _showRegionSelector() called');
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder:
           (context) => RegionSelector(
             selectedRegion: _selectedRegion,
-            onRegionSelected: (region) {
+            onRegionSelected: (region) async {
               print('🔴 REGION SELECTOR CALLBACK - Selected region: $region');
 
               setState(() {
@@ -876,11 +871,14 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
               });
               // Refetch movies, languages, and genres for the selected region
               print('🔴 CALLING fetchMovies with region: $region');
-              _controller.fetchMovies(region: region);
+              await _controller.fetchMovies(region: region);
+              print('🔴 fetchMovies completed');
               print('🔴 CALLING fetchLanguages with region: $region');
-              _controller.fetchLanguages(region: region);
+              await _controller.fetchLanguages(region: region);
+              print('🔴 fetchLanguages completed');
               print('🔴 CALLING fetchGenres with region: $region');
-              _controller.fetchGenres(region: region);
+              await _controller.fetchGenres(region: region);
+              print('🔴 fetchGenres completed');
             },
           ),
     );
