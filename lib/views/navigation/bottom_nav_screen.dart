@@ -55,23 +55,28 @@ class BottomNavScreen extends ConsumerWidget {
           ),
           child: IndexedStack(index: selectedIndex, children: pages),
         ),
-        bottomNavigationBar: CustomBottomNav(
-          currentIndex: selectedIndex,
-          onTap: (i) {
-            // Close any open modals using the navigator key
-            if (navigatorKey.currentState != null) {
-              while (navigatorKey.currentState!.canPop()) {
-                navigatorKey.currentState!.pop();
+        bottomNavigationBar: SafeArea(
+          // Prevent system gestures from hiding the bottom nav
+          top: false,
+          maintainBottomViewPadding: true,
+          child: CustomBottomNav(
+            currentIndex: selectedIndex,
+            onTap: (i) {
+              // Close any open modals using the navigator key
+              if (navigatorKey.currentState != null) {
+                while (navigatorKey.currentState!.canPop()) {
+                  navigatorKey.currentState!.pop();
+                }
               }
-            }
 
-            ref.read(bottomNavIndexProvider.notifier).state = i;
-            if (i != 1) {
-              ref.read(selectedCinemaChainProvider.notifier).state = null;
-              ref.read(selectedCinemaLocationProvider.notifier).state = null;
-              ref.read(selectedMovieTitleProvider.notifier).state = null;
-            }
-          },
+              ref.read(bottomNavIndexProvider.notifier).state = i;
+              if (i != 1) {
+                ref.read(selectedCinemaChainProvider.notifier).state = null;
+                ref.read(selectedCinemaLocationProvider.notifier).state = null;
+                ref.read(selectedMovieTitleProvider.notifier).state = null;
+              }
+            },
+          ),
         ),
       ),
     );

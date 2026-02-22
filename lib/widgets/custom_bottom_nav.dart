@@ -43,18 +43,23 @@ class CustomBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-        color: AppColors.bottomNav,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _navItem(Icons.home_outlined, 'Home', 0),
-            _navItem(Icons.local_movies_outlined, 'Cinema', 1),
-            _navItem(Icons.task_alt_outlined, 'Tick', 2),
-            _navItem(Icons.info_outline, 'About', 3),
-          ],
+    return Material(
+      // Prevent gestures from passing through
+      color: AppColors.bottomNav,
+      child: ClipRRect(
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+          color: AppColors.bottomNav,
+          // Ensure the nav bar stays on top of gesture navigation
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _navItem(Icons.home_outlined, 'Home', 0),
+              _navItem(Icons.local_movies_outlined, 'Cinema', 1),
+              _navItem(Icons.task_alt_outlined, 'Tick', 2),
+              _navItem(Icons.info_outline, 'About', 3),
+            ],
+          ),
         ),
       ),
     );

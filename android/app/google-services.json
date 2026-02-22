@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "565297319963",
+    "project_id": "cinematick-abd82",
+    "storage_bucket": "cinematick-abd82.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:565297319963:android:ba9fdd7fe721c43fb028be",
+        "android_client_info": {
+          "package_name": "com.cinematick.cinematick"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBreAEwJXrhI15TigjLTv8gmClE0unzwKI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -74,7 +74,6 @@ class HomeScreenController {
   }
 
   void _initializeFilters() {
-    // Initialize with static lists, will be updated by API calls
     langList = allLanguages;
     genreList = allGenres;
     langSelected = List<bool>.filled(langList.length, false);
@@ -105,7 +104,6 @@ class HomeScreenController {
         final data = jsonDecode(response.body) as List?;
         final movies = data?.cast<Map<String, dynamic>>() ?? [];
 
-        // Extract unique languages from all movies
         final languageSet = <String>{};
         for (var movie in movies) {
           final languages = (movie['language'] as List?)?.cast<String>() ?? [];
@@ -114,14 +112,10 @@ class HomeScreenController {
 
         final fetchedLanguages = languageSet.toList();
 
-        print('=== FETCHED LANGUAGES FROM API (HOME) ===');
-        print('Total languages from API: ${fetchedLanguages.length}');
         for (int i = 0; i < fetchedLanguages.length; i++) {
           print('  ${i + 1}. ${fetchedLanguages[i]}');
         }
-        print('==========================================');
 
-        // Capitalize and use the fetched languages
         langList =
             fetchedLanguages
                 .map((lang) => lang[0].toUpperCase() + lang.substring(1))
@@ -137,7 +131,6 @@ class HomeScreenController {
         throw Exception('Failed to load languages');
       }
     } catch (e) {
-      print('Error fetching languages (home): $e');
       langList = allLanguages;
       langSelected = List<bool>.filled(allLanguages.length, false);
       _isLoadingLanguages = false;
@@ -156,7 +149,6 @@ class HomeScreenController {
         final data = jsonDecode(response.body) as List?;
         final movies = data?.cast<Map<String, dynamic>>() ?? [];
 
-        // Extract unique genres from all movies
         final genreSet = <String>{};
         for (var movie in movies) {
           final genres = (movie['genres'] as List?)?.cast<String>() ?? [];
@@ -165,12 +157,9 @@ class HomeScreenController {
 
         final fetchedGenres = genreSet.toList();
 
-        print('=== FETCHED GENRES FROM API (HOME) ===');
-        print('Total genres from API: ${fetchedGenres.length}');
         for (int i = 0; i < fetchedGenres.length; i++) {
           print('  ${i + 1}. ${fetchedGenres[i]}');
         }
-        print('==========================================');
 
         genreList = fetchedGenres;
         if (genreList.isEmpty) {
@@ -193,8 +182,6 @@ class HomeScreenController {
     if (region != null) {
       currentRegion = region;
     }
-    print('=== FETCHING MOVIES ===');
-    print('Region: $currentRegion, Language: $language');
     isLoading = true;
     errorMessage = null;
 
@@ -203,29 +190,21 @@ class HomeScreenController {
         region: currentRegion,
         language: language,
       );
-      print(
-        '✅ Fetched ${trendingMovies.length} trending movies for region: $currentRegion',
-      );
 
       upcomingMovies = await _movieRepository.getUpcomingMovies(
         region: currentRegion,
         language: language,
-      );
-      print(
-        '✅ Fetched ${upcomingMovies.length} upcoming movies for region: $currentRegion',
       );
 
       for (var movie in upcomingMovies) {
         movie['status'] = 'Upcoming';
       }
     } catch (err) {
-      print('❌ Error fetching movies: $err');
       errorMessage = 'Failed to load movies';
       trendingMovies = [];
       upcomingMovies = [];
     } finally {
       isLoading = false;
-      print('=== MOVIES FETCH COMPLETE ===');
     }
 
     onStateChange?.call();
@@ -265,7 +244,14 @@ class HomeScreenController {
         langList: langList,
       );
 
-  List<Map<String, dynamic>> get filteredComingSoonMovies => upcomingMovies;
+  List<Map<String, dynamic>> get filteredComingSoonMovies =>
+      _filterService.filterMovies(
+        upcomingMovies,
+        langSelected,
+        genreSelected,
+        'Upcoming',
+        langList: langList,
+      );
 
   List<Map<String, dynamic>> get trendingTop10 =>
       _filterService.sortAndLimitTrendingMovies(trendingMovies, 5);
@@ -290,12 +276,10 @@ class HomeScreenController {
       }
     }
 
-    // Fetch movies with the selected language
     String? selectedLanguageCode;
     if (selectedLangIndex >= 0 && selectedLangIndex < langList.length) {
       final languageName = langList[selectedLangIndex];
       selectedLanguageCode = _languageNameToCode(languageName);
-      print('Selected language: $languageName -> Code: $selectedLanguageCode');
     }
     fetchMovies(region: currentRegion, language: selectedLanguageCode);
   }

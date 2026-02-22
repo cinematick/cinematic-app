@@ -266,10 +266,10 @@ class CinemaMovieTile extends ConsumerWidget {
                         physics: const NeverScrollableScrollPhysics(),
                         gridDelegate:
                             const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 4,
+                              crossAxisCount: 3,
                               crossAxisSpacing: 8,
                               mainAxisSpacing: 8,
-                              childAspectRatio: 1.2,
+                              childAspectRatio: 1.8,
                             ),
                         itemCount: futureShowtimes.length,
                         itemBuilder: (context, idx) {
@@ -292,7 +292,6 @@ return GestureDetector(
   child: Stack(
     children: [
 
-      // 🎫 Showtime Box
       Container(
         padding: const EdgeInsets.symmetric(
           horizontal: 4,
@@ -315,21 +314,22 @@ return GestureDetector(
               _formatTime(s['time'], ref),
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 12,
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 2),
             Flexible(
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisSize: MainAxisSize.max,
                 children: [
                   Expanded(
                     child: Text(
                       format,
                       style: const TextStyle(
                         color: Colors.white70,
-                        fontSize: 10,
+                        fontSize: 8,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -341,7 +341,8 @@ return GestureDetector(
                     style: TextStyle(
                       color:
                           minPrice == 0 ? Colors.red : Colors.green,
-                      fontSize: 10,
+                      fontSize: 8,
+
                     ),
                   ),
                 ],

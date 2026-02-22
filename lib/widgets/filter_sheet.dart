@@ -75,184 +75,163 @@ class _FilterSheetWidgetState extends State<FilterSheetWidget> {
               ],
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Filters",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 26,
+          child: SafeArea(
+            top: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      "Filters",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 26,
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(
-                      Icons.close,
-                      color: Colors.white70,
-                      size: 26,
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(
+                        Icons.close,
+                        color: Colors.white70,
+                        size: 26,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Languages Section
-                      if (widget.allLanguages.isNotEmpty) ...[
-                        const SizedBox(height: 25),
-                        const Text(
-                          "Languages",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 20,
+                  ],
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Languages Section
+                        if (widget.allLanguages.isNotEmpty) ...[
+                          const SizedBox(height: 25),
+                          const Text(
+                            "Languages",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 20,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 15),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: List.generate(widget.allLanguages.length, (
-                            i,
-                          ) {
-                            final selected = widget.langSelected[i];
-                            final capitalizedLanguage =
-                                widget.allLanguages[i][0].toUpperCase() +
-                                widget.allLanguages[i].substring(1);
-                            return _buildGradientChip(
-                              label: capitalizedLanguage,
-                              selected: selected,
-                              onSelected: () {
-                                setState(() {
-                                  widget.langSelected[i] = !selected;
-                                });
+                          const SizedBox(height: 15),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: List.generate(
+                              widget.allLanguages.length,
+                              (i) {
+                                final selected = widget.langSelected[i];
+                                final capitalizedLanguage =
+                                    widget.allLanguages[i][0].toUpperCase() +
+                                    widget.allLanguages[i].substring(1);
+                                return _buildGradientChip(
+                                  label: capitalizedLanguage,
+                                  selected: selected,
+                                  onSelected: () {
+                                    setState(() {
+                                      widget.langSelected[i] = !selected;
+                                    });
+                                  },
+                                );
                               },
-                            );
-                          }),
-                        ),
-                      ],
-                      // Screen Experience Section
-                      const SizedBox(height: 25),
-                      const Text(
-                        "Screen Experience",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 20,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: List.generate(widget.allExperiences.length, (
-                          i,
-                        ) {
-                          final selected = widget.xpSelected[i];
-                          return _buildGradientChip(
-                            label: widget.allExperiences[i],
-                            selected: selected,
-                            onSelected:
-                                () => setState(
-                                  () => widget.xpSelected[i] = !selected,
-                                ),
-                          );
-                        }),
-                      ),
-                      // Genres Section
-                      if (widget.allGenres.isNotEmpty) ...[
-                        const SizedBox(height: 25),
-                        const Text(
-                          "Genres",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 20,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: List.generate(widget.allGenres.length, (i) {
-                            final selected = widget.genreSelected[i];
-                            return _buildGradientChip(
-                              label: widget.allGenres[i],
-                              selected: selected,
-                              onSelected:
-                                  () => setState(
-                                    () => widget.genreSelected[i] = !selected,
-                                  ),
-                            );
-                          }),
-                        ),
+                        ],
+                        
+                        // Genres Section
+                        if (widget.allGenres.isNotEmpty) ...[
+                          const SizedBox(height: 25),
+                          const Text(
+                            "Genres",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 20,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: List.generate(widget.allGenres.length, (
+                              i,
+                            ) {
+                              final selected = widget.genreSelected[i];
+                              return _buildGradientChip(
+                                label: widget.allGenres[i],
+                                selected: selected,
+                                onSelected:
+                                    () => setState(
+                                      () => widget.genreSelected[i] = !selected,
+                                    ),
+                              );
+                            }),
+                          ),
+                        ],
+                        const SizedBox(height: 25),
                       ],
-                      const SizedBox(height: 25),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: widget.onApply,
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: AppColors.filterGradient,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 11),
-                        alignment: Alignment.center,
-                        child: const Text(
-                          "Apply Filters",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: widget.onApply,
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: AppColors.filterGradient,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            "Apply Filters",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: widget.onClear,
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(
-                          color: Colors.white54,
-                          width: 1.6,
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: widget.onClear,
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(
+                            color: Colors.white54,
+                            width: 1.6,
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: const Text(
-                        "Clear All",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                        child: const Text(
+                          "Clear All",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

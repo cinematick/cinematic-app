@@ -2,6 +2,7 @@ import 'package:cinematick/widgets/app_colors.dart';
 import 'package:cinematick/widgets/custom_app_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -9,7 +10,7 @@ class AboutScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF2B1967), // Your App Base Color
+      backgroundColor: const Color(0xFF2B1967), 
       appBar: const CustomAppBar(),
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
@@ -96,7 +97,6 @@ class AboutScreen extends StatelessWidget {
               ),
 
               const SizedBox(height: 30),
-              // 3. THE FEATURE EXPLAINER (Cinema vs Tick)
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -143,28 +143,27 @@ class AboutScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 20),
                     const Row(
-                        children: [
-                          Text(
-                            'Note: ',
+                      children: [
+                        Text(
+                          'Note: ',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            "We don't sell tickets. We redirect you to official cinema websites.",
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                              height: 1.4,
                             ),
                           ),
-                          Expanded(
-                            child: Text(
-                              "We don't sell tickets. We redirect you to official cinema websites.",
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                height: 1.4,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -178,15 +177,49 @@ class AboutScreen extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Center(
-                child: Text(
-                  'Developed & Managed by MyLeadKart ',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.3),
-                    fontSize: 12,
+                child: RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Developed & Managed by ',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.3),
+                          fontSize: 12,
+                        ),
+                      ),
+                      WidgetSpan(
+                        child: GestureDetector(
+                          onTap: () async {
+                            const url = 'https://www.myleadkart.com';
+                            if (await canLaunchUrl(Uri.parse(url))) {
+                              await launchUrl(Uri.parse(url));
+                            }
+                          },
+                          child: const MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: Text(
+                              'MyLeadKart',
+                              style: TextStyle(
+                                color: AppColors.orange,
+                                fontSize: 12,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      TextSpan(
+                        text: ' ',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.3),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: 80), // Bottom padding for nav bar
+              const SizedBox(height: 80),
             ],
           ),
         ),
@@ -248,7 +281,7 @@ class AboutScreen extends StatelessWidget {
       padding: const EdgeInsets.only(left: 4),
       child: Text(
         title,
-        style: TextStyle(
+        style: const TextStyle(
           color: Colors.white,
           fontSize: 20,
           fontWeight: FontWeight.w700,
@@ -265,8 +298,8 @@ class AboutScreen extends StatelessWidget {
   }) {
     return Expanded(
       child: Container(
-        height: 185,
-        padding: const EdgeInsets.all(14),
+        height: 160,
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.08),
           borderRadius: BorderRadius.circular(16),
@@ -275,24 +308,28 @@ class AboutScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(icon, style: const TextStyle(fontSize: 25)),
-            const SizedBox(height: 10),
+            Text(icon, style: const TextStyle(fontSize: 24)),
+            const SizedBox(height: 8),
             Text(
               title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
-                fontSize: 14,
+                fontSize: 12,
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              description,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.7),
-                fontSize: 12,
-                height: 1.35,
+            const SizedBox(height: 6),
+            Expanded(
+              child: Text(
+                description,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 11,
+                  height: 1.3,
+                ),
               ),
             ),
           ],

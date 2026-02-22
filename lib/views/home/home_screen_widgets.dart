@@ -477,15 +477,15 @@ class HomeScreenWidgets {
   }) {
     if (movies.isEmpty) {
       if (errorMessage != null) {
-        return Center(
+        return const Center(
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
+            padding: EdgeInsets.symmetric(vertical: 20),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.wifi_off, color: Colors.white30, size: 48),
-                const SizedBox(height: 16),
-                const Text(
+                Icon(Icons.wifi_off, color: Colors.white30, size: 48),
+                SizedBox(height: 16),
+                Text(
                   'Check your connectivity',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white70, fontSize: 14),

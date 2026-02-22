@@ -63,6 +63,78 @@ class StickyHeader extends SliverPersistentHeaderDelegate {
     );
   }
 
+  /// Calculate similarity score between two strings using Levenshtein distance
+  double _calculateSimilarity(String s1, String s2) {
+    if (s1.isEmpty && s2.isEmpty) return 1.0;
+    if (s1.isEmpty || s2.isEmpty) return 0.0;
+
+    final len1 = s1.length;
+    final len2 = s2.length;
+    final maxLen = len1 > len2 ? len1 : len2;
+
+    // Levenshtein distance calculation
+    final d = List<List<int>>.generate(
+      len1 + 1,
+      (i) => List<int>.generate(len2 + 1, (j) => 0),
+    );
+
+    for (int i = 0; i <= len1; i++) {
+      d[i][0] = i;
+    }
+    for (int j = 0; j <= len2; j++) {
+      d[0][j] = j;
+    }
+
+    for (int i = 1; i <= len1; i++) {
+      for (int j = 1; j <= len2; j++) {
+        final cost = s1[i - 1] == s2[j - 1] ? 0 : 1;
+        d[i][j] = [
+          d[i - 1][j] + 1,
+          d[i][j - 1] + 1,
+          d[i - 1][j - 1] + cost,
+        ].reduce((a, b) => a < b ? a : b);
+      }
+    }
+
+    return 1.0 - (d[len1][len2] / maxLen);
+  }
+
+  /// Fuzzy search that handles typos, spaces, and partial matches
+  bool _fuzzyMatch(String query, String text) {
+    if (query.isEmpty) return true;
+    if (text.isEmpty) return false;
+
+    // Normalize both strings: lowercase and remove extra spaces
+    final normalizedQuery = query.toLowerCase().trim().replaceAll(
+      RegExp(r'\s+'),
+      '',
+    );
+    final normalizedText = text.toLowerCase().trim().replaceAll(
+      RegExp(r'\s+'),
+      '',
+    );
+
+    // Check for exact substring match first (highest priority)
+    if (normalizedText.contains(normalizedQuery)) return true;
+
+    // Check for partial character-by-character match
+    var queryIdx = 0;
+    for (
+      int i = 0;
+      i < normalizedText.length && queryIdx < normalizedQuery.length;
+      i++
+    ) {
+      if (normalizedText[i] == normalizedQuery[queryIdx]) {
+        queryIdx++;
+      }
+    }
+    if (queryIdx == normalizedQuery.length) return true;
+
+    // Check similarity score (handles typos and small differences)
+    final similarity = _calculateSimilarity(normalizedQuery, normalizedText);
+    return similarity > 0.65; // Threshold for fuzzy matching
+  }
+
   Widget _buildMovieHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
@@ -124,8 +196,8 @@ class StickyHeader extends SliverPersistentHeaderDelegate {
                   '')
               .toString();
 
-      // Add movie title suggestion if it contains the search query
-      if (title.isNotEmpty && title.toLowerCase().contains(query)) {
+      // Add movie title suggestion if it fuzzy matches the search query
+      if (title.isNotEmpty && _fuzzyMatch(query, title)) {
         final key = 'movie_$title';
         if (!seenKeys.contains(key)) {
           suggestions.add({
@@ -138,8 +210,8 @@ class StickyHeader extends SliverPersistentHeaderDelegate {
         }
       }
 
-      // Add cinema name suggestion if it contains the search query
-      if (cinemaName.isNotEmpty && cinemaName.toLowerCase().contains(query)) {
+      // Add cinema name suggestion if it fuzzy matches the search query
+      if (cinemaName.isNotEmpty && _fuzzyMatch(query, cinemaName)) {
         final key = 'cinema_$cinemaName';
         if (!seenKeys.contains(key)) {
           suggestions.add({

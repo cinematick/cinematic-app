@@ -54,13 +54,8 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
 
   @override
   Widget build(BuildContext context) {
-    // Listen for region changes from Riverpod provider and refetch movies
     ref.listen(selectedRegionProvider, (previous, next) {
       if (previous != null && previous != next) {
-        print(
-          '🟡 HOME SCREEN: Riverpod region changed from $previous to $next',
-        );
-        print('🟡 HOME SCREEN: Refetching movies for region: $next');
         _controller.currentRegion = next;
         _controller.fetchMovies(region: next);
         _controller.fetchLanguages(region: next);
@@ -113,6 +108,106 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
     }
   }
 
+  double _calculateSimilarity(String s1, String s2) {
+    if (s1.isEmpty && s2.isEmpty) return 1.0;
+    if (s1.isEmpty || s2.isEmpty) return 0.0;
+
+    final len1 = s1.length;
+    final len2 = s2.length;
+    final maxLen = len1 > len2 ? len1 : len2;
+
+    final d = List<List<int>>.generate(
+      len1 + 1,
+      (i) => List<int>.generate(len2 + 1, (j) => 0),
+    );
+
+    for (int i = 0; i <= len1; i++) {
+      d[i][0] = i;
+    }
+    for (int j = 0; j <= len2; j++) {
+      d[0][j] = j;
+    }
+
+    for (int i = 1; i <= len1; i++) {
+      for (int j = 1; j <= len2; j++) {
+        final cost = s1[i - 1] == s2[j - 1] ? 0 : 1;
+        d[i][j] = [
+          d[i - 1][j] + 1, 
+          d[i][j - 1] + 1,
+          d[i - 1][j - 1] + cost, 
+        ].reduce((a, b) => a < b ? a : b);
+      }
+    }
+
+    return 1.0 - (d[len1][len2] / maxLen);
+  }
+
+  bool _fuzzyMatch(String query, String text) {
+    if (query.isEmpty) return true;
+    if (text.isEmpty) return false;
+
+    final normalizedQuery = query.toLowerCase().trim().replaceAll(
+      RegExp(r'\s+'),
+      '',
+    );
+    final normalizedText = text.toLowerCase().trim().replaceAll(
+      RegExp(r'\s+'),
+      '',
+    );
+
+    if (normalizedText.contains(normalizedQuery)) return true;
+
+    var queryIdx = 0;
+    for (
+      int i = 0;
+      i < normalizedText.length && queryIdx < normalizedQuery.length;
+      i++
+    ) {
+      if (normalizedText[i] == normalizedQuery[queryIdx]) {
+        queryIdx++;
+      }
+    }
+    if (queryIdx == normalizedQuery.length) return true;
+
+    final similarity = _calculateSimilarity(normalizedQuery, normalizedText);
+    return similarity > 0.65; 
+  }
+
+  double _getMatchScore(String query, String text) {
+    final normalizedQuery = query.toLowerCase().trim().replaceAll(
+      RegExp(r'\s+'),
+      '',
+    );
+    final normalizedText = text.toLowerCase().trim().replaceAll(
+      RegExp(r'\s+'),
+      '',
+    );
+
+    if (normalizedText == normalizedQuery) return 100.0;
+
+    if (normalizedText.startsWith(normalizedQuery)) return 90.0;
+
+    if (normalizedText.contains(normalizedQuery)) return 80.0;
+
+    var queryIdx = 0;
+    var matchCount = 0;
+    for (
+      int i = 0;
+      i < normalizedText.length && queryIdx < normalizedQuery.length;
+      i++
+    ) {
+      if (normalizedText[i] == normalizedQuery[queryIdx]) {
+        queryIdx++;
+        matchCount++;
+      }
+    }
+    if (queryIdx == normalizedQuery.length) {
+      return 70.0 * (matchCount / normalizedQuery.length);
+    }
+
+    return _calculateSimilarity(normalizedQuery, normalizedText) * 60.0;
+  }
+
   void _performSearch(String query) {
     setState(() {
       _searchQuery = query.toLowerCase();
@@ -122,13 +217,15 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
         final suggestions = <Map<String, dynamic>>[];
         final seenKeys = <String>{};
 
+        final movieMatches = <Map<String, dynamic>>[];
         for (var movie in _controller.trendingMovies) {
-          final title = (movie['title'] ?? '').toString().toLowerCase();
+          final title = (movie['title'] ?? '').toString();
 
-          if (title.isNotEmpty && title.contains(_searchQuery)) {
-            final key = 'movie_${movie['title']}';
-            if (!seenKeys.contains(key)) {
-              suggestions.add({
+          if (title.isNotEmpty && _fuzzyMatch(_searchQuery, title)) {
+            final score = _getMatchScore(_searchQuery, title);
+            movieMatches.add({
+              'score': score,
+              'data': {
                 'type': 'movie',
                 'title': movie['title'],
                 'year': movie['year'] ?? '',
@@ -136,9 +233,19 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
                 'posterPath': movie['posterPath'] ?? movie['image'] ?? '',
                 'tmdbId': movie['tmdbId'] ?? movie['id'] ?? '',
                 'icon': Icons.movie,
-              });
-              seenKeys.add(key);
-            }
+              },
+              'key': 'movie_${movie['title']}',
+            });
+          }
+        }
+        movieMatches.sort(
+          (a, b) => (b['score'] as double).compareTo(a['score'] as double),
+        );
+
+        for (var match in movieMatches) {
+          if (!seenKeys.contains(match['key'])) {
+            suggestions.add(match['data']);
+            seenKeys.add(match['key']);
           }
         }
 
@@ -164,27 +271,37 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final cinemas = (data as List?)?.cast<Map<String, dynamic>>() ?? [];
-        final queryLower = query.toLowerCase();
 
+        final cinemaMatches = <Map<String, dynamic>>[];
         for (var cinema in cinemas) {
           final cinemaName = (cinema['cinema_name'] ?? '').toString();
           final cinemaCity = (cinema['cinema_city'] ?? '').toString();
-          final cinemaCityLower = cinemaCity.toLowerCase();
-          final key = 'cinema_$cinemaCity';
 
-          if (cinemaCityLower.isNotEmpty &&
-              cinemaCityLower.contains(queryLower)) {
-            if (!seenKeys.contains(key)) {
-              suggestions.add({
+          if (cinemaCity.isNotEmpty && _fuzzyMatch(_searchQuery, cinemaCity)) {
+            final score = _getMatchScore(_searchQuery, cinemaCity);
+            cinemaMatches.add({
+              'score': score,
+              'data': {
                 'type': 'cinema',
                 'name': cinemaName,
                 'city': cinemaCity,
                 'address': cinema['cinema_state'] ?? '',
                 'id': cinema['cinema_id'] ?? '',
                 'icon': Icons.location_on,
-              });
-              seenKeys.add(key);
-            }
+              },
+              'key': 'cinema_$cinemaCity',
+            });
+          }
+        }
+
+        cinemaMatches.sort(
+          (a, b) => (b['score'] as double).compareTo(a['score'] as double),
+        );
+
+        for (var match in cinemaMatches) {
+          if (!seenKeys.contains(match['key'])) {
+            suggestions.add(match['data']);
+            seenKeys.add(match['key']);
           }
         }
 
@@ -793,24 +910,25 @@ class _HomeScreenContentState extends ConsumerState<HomeScreenContent> {
   }
 
   void _openShowTime(Map<String, dynamic> movie) {
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (_) => ShowTimeScreen(
-        movie: Map<String, String>.from(
-          movie.map((k, v) => MapEntry(k, v?.toString() ?? '')),
-        ),
-        tmdbId: movie['tmdbId']?.toString() ?? '',
-        backdropPath:
-            movie['backdropPath']?.toString() ??
-            movie['posterPath']?.toString() ??
-            movie['image']?.toString() ??
-            '',
-        location: _selectedRegion,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (_) => ShowTimeScreen(
+              movie: Map<String, String>.from(
+                movie.map((k, v) => MapEntry(k, v?.toString() ?? '')),
+              ),
+              tmdbId: movie['tmdbId']?.toString() ?? '',
+              backdropPath:
+                  movie['backdropPath']?.toString() ??
+                  movie['posterPath']?.toString() ??
+                  movie['image']?.toString() ??
+                  '',
+              location: _selectedRegion,
+            ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   void _navigateToCinemaDetail(Map<String, dynamic> cinema) {
     Navigator.of(context)

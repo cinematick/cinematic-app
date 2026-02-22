@@ -85,15 +85,12 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
   @override
   Widget build(BuildContext context) {
     final chainState = ref.watch(cinemaChainProvider);
-    final selectedRegion = ref.watch(selectedRegionProvider);
 
-    // Clear cache when region changes so locations are refetched for new region
     ref.listen(selectedRegionProvider, (previous, next) {
       if (previous != null && previous != next) {
         setState(() {
           cinemasByChain.clear();
         });
-        print('Region changed from $previous to $next - cinema cache cleared');
       }
     });
 
@@ -115,7 +112,7 @@ class _CinemaScreenState extends ConsumerState<CinemaScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF2B1967),
+      backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: false,
       body: MediaQuery.removeViewInsets(
         context: context,

@@ -15,7 +15,6 @@ class AppColors {
     ],
     stops: [0.0, 0.50, 1.0],
   );
-
   static const Color accentOrange = Color(0xFFFFB64B);
   static const Color goldStar = Color(0xFFFFC14C);
   static const Color orange = Color.fromARGB(255, 238, 112, 67);

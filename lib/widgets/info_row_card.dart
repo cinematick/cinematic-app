@@ -143,7 +143,7 @@ class _InfoSection extends StatelessWidget {
                 ),
 
                 Text(
-                  'AVAILABILITY',
+                  'AVAILABLE',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(

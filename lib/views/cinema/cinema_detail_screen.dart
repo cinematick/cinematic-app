@@ -62,7 +62,7 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
   late TextEditingController _genreSearchController;
   final FocusNode _movieSearchFocusNode = FocusNode();
   bool _showMovieSuggestions = false;
-  bool _isInitialLoad = true; // Track if this is the initial load
+  bool _isInitialLoad = true;
 
   final List<String> _allExperiences = ['2D', '3D', 'IMAX', 'Dolby'];
   final List<String> _allGenres = [
@@ -121,7 +121,7 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
     _movieSearchController = TextEditingController();
     _genreSearchController = TextEditingController();
     print('TMDB ID: ${widget.tmdbId}');
-    selectedDateIndex = 0; // Start with today (index 0), like show_time_screen
+    selectedDateIndex = 0; 
     _xpSelected = List<bool>.filled(_allExperiences.length, false);
     _langSelected = [];
     _genreSelected = [];
@@ -293,19 +293,15 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
 
   String _calculateApiDateForRegion(String localDateStr, String region) {
     try {
-      // Parse the local date string (format: YYYY-MM-DD)
       final parts = localDateStr.split('-');
       final year = int.parse(parts[0]);
       final month = int.parse(parts[1]);
       final day = int.parse(parts[2]);
 
-      // Get timezone location for the region
       final regionTimezoneMap = ref.read(availableAustralianTimezonesProvider);
       final timezoneName = regionTimezoneMap[region] ?? 'Australia/Sydney';
       final location = tz.getLocation(timezoneName);
 
-      // Create midnight at END of the local date (next day's midnight in region timezone)
-      // This gives us the UTC time that represents the full local date
       final nextDay = DateTime(year, month, day).add(const Duration(days: 1));
       final midnightLocal = tz.TZDateTime(
         location,
@@ -317,10 +313,8 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
         0,
       );
 
-      // Convert to UTC
       final utcTime = midnightLocal.toUtc();
 
-      // Also calculate 1 day later midnight in UTC for reference
       final dayAfter = nextDay.add(const Duration(days: 1));
       final nextDayLocal = tz.TZDateTime(
         location,
@@ -333,28 +327,12 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
       );
       final nextDayUtc = nextDayLocal.toUtc();
 
-      // Format as YYYY-MM-DD for API
       final apiDate =
           '${utcTime.year}-${utcTime.month.toString().padLeft(2, '0')}-${utcTime.day.toString().padLeft(2, '0')}';
 
-      print('═══════════════════════════════════════════════════════════');
-      print('API_DATE_CALCULATION:');
-      print('  Region: $region ($timezoneName)');
-      print('  User Selected Local Date: $localDateStr');
-      print('  Local End of Day Midnight: $midnightLocal');
-      print('  UTC Equivalent: $utcTime');
-      print('  Next Day Local Midnight: $nextDayLocal');
-      print('  Next Day UTC Equivalent: $nextDayUtc');
-      print('  API Date to Fetch: $apiDate');
-      print(
-        '  UTC Time Range Covered: ${utcTime.hour}:${utcTime.minute.toString().padLeft(2, '0')} - ${nextDayUtc.hour}:${nextDayUtc.minute.toString().padLeft(2, '0')}',
-      );
-      print('═══════════════════════════════════════════════════════════');
-
       return apiDate;
     } catch (e) {
-      print('Error calculating API date: $e');
-      return localDateStr; // Fallback to local date if calculation fails
+      return localDateStr; 
     }
   }
 
@@ -375,7 +353,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
             '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
       }
 
-      // Get selected region and calculate API date
       final region = ref.read(selectedRegionProvider);
       final apiDate = _calculateApiDateForRegion(dateStr, region);
 
@@ -413,7 +390,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
     if (!mounted) return;
 
     try {
-      // Get selected region and calculate API date
       final region = ref.read(selectedRegionProvider);
       final apiDate = _calculateApiDateForRegion(dateStr, region);
 
@@ -469,7 +445,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
           final movieGenres = (movie['genres'] as List?)?.cast<String>() ?? [];
           final movieVoteAverage = movie['voteAverage'];
 
-          // Store the first movie's rating to use as the header rating
           if (_firstMovieRating == 'N/A' && movieVoteAverage != null) {
             try {
               final ratingValue =
@@ -504,11 +479,11 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                   showtime['language'] ??
                   _getFirstLanguage(movie['language']) ??
                   'english',
-              'screen_name':
-                  showtime['screenName'] ?? showtime['screen'] ?? 'Screen',
               'seats': [
                 {'type': 'standard', 'price': showtime['minPrice']},
               ],
+              'seatTypes': showtime['seatTypes'] ?? [],
+              'isPremium': showtime['isPremium'] ?? false,
               'total_seats': showtime['totalSeats'],
               'total_seats_available': showtime['availableSeats'],
             });
@@ -520,7 +495,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
           '   isAutoAdvance=$isAutoAdvance, selectedDateIndex=$selectedDateIndex, generatedDatesLength=${_generatedDates.length}',
         );
 
-        // Check if the FIRST date (index 0 = today) has any valid showtimes
         final firstDateStr =
             _generatedDates.isNotEmpty ? _generatedDates[0]['dateStr'] : '';
         final showtimesForFirstDate =
@@ -551,15 +525,11 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
             '   Current dates: ${_generatedDates.map((d) => '${d['num']} ${d['month']}').toList()}',
           );
 
-          // Capture the next date BEFORE modifying the list
           final nextDateStr = _generatedDates[1]['dateStr'];
 
-          // Remove today's date - this shifts all dates forward
           _generatedDates.removeAt(0);
-          // Keep selectedDateIndex at 0 (now points to tomorrow)
           selectedDateIndex = 0;
 
-          // Add a 7th date to maintain 6 available dates
           final lastDate =
               _generatedDates.isNotEmpty
                   ? DateTime.parse(_generatedDates.last['dateStr'] as String)
@@ -598,23 +568,16 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                 '${newDate.year}-${newDate.month.toString().padLeft(2, '0')}-${newDate.day.toString().padLeft(2, '0')}',
           });
 
-          print(
-            '   ✅ Removed date, dates NOW: ${_generatedDates.map((d) => '${d['num']} ${d['month']}').toList()}',
-          );
-
-          // Trigger rebuild so UI updates to show new date list
           setState(() {
             _isLoading = true;
           });
 
-          // Fetch the captured next date after state updates
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _fetchShowtimesForSpecificDate(nextDateStr, isAutoAdvance: true);
           });
           return;
         }
 
-        // Mark initial load as complete
         if (_isInitialLoad) {
           _isInitialLoad = false;
         }
@@ -626,7 +589,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
           _genreSelected = List<bool>.filled(_availableGenres.length, false);
           _calculateCinemaDistances();
           _isLoading = false;
-          // Only skip to first date with showtimes on initial load, not on manual selection
           if (!isAutoAdvance) {
             _skipToFirstDateWithShowtimes();
           }
@@ -660,7 +622,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
       if (data.isEmpty) {
         print('WARNING: API returned empty list of showtimes');
 
-        // Auto-advance if the first date (today/index 0) has no showtimes
         if (_generatedDates.isNotEmpty && _generatedDates.length > 1) {
           print(
             '⚠️ TRIGGERING AUTO-ADVANCE (Movie API): No showtimes found for ${_generatedDates[0]['dateStr']}',
@@ -669,15 +630,11 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
             '   Current dates: ${_generatedDates.map((d) => '${d['num']} ${d['month']}').toList()}',
           );
 
-          // Capture the next date BEFORE modifying the list
           final nextDateStr = _generatedDates[1]['dateStr'];
 
-          // Remove the first date (today) since it has no showtimes
           _generatedDates.removeAt(0);
-          // Keep selectedDateIndex at 0 (now points to tomorrow)
           selectedDateIndex = 0;
 
-          // Add a 7th date to maintain 6 available dates
           final lastDate =
               _generatedDates.isNotEmpty
                   ? DateTime.parse(_generatedDates.last['dateStr'] as String)
@@ -721,19 +678,16 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
             '   ✅ Removed date, dates NOW: ${_generatedDates.map((d) => '${d['num']} ${d['month']}').toList()}',
           );
 
-          // Trigger rebuild so UI updates to show new date list
           setState(() {
             _isLoading = true;
           });
 
-          // Fetch the captured next date after state updates
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _fetchShowtimesForSpecificDate(nextDateStr, isAutoAdvance: true);
           });
           return;
         }
 
-        // Mark initial load as complete
         if (_isInitialLoad) {
           _isInitialLoad = false;
         }
@@ -748,7 +702,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
         return;
       }
 
-      // Check if the FIRST date (index 0 = today) has any valid showtimes
       final firstDateStr =
           _generatedDates.isNotEmpty ? _generatedDates[0]['dateStr'] : '';
       final newShowtimes = List<Map<String, dynamic>>.from(data);
@@ -768,7 +721,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
             return !_isShowtimePassed(showtime['start_time']?.toString() ?? '');
           }).toList();
 
-      // If the first date has no valid showtimes, trigger auto-advance (but only on initial load, not on manual selection)
       if (validShowtimesForFirstDate.isEmpty &&
           !isAutoAdvance &&
           _generatedDates.isNotEmpty &&
@@ -780,15 +732,11 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
           '   Current dates: ${_generatedDates.map((d) => '${d['num']} ${d['month']}').toList()}',
         );
 
-        // Capture the next date BEFORE modifying the list
         final nextDateStr = _generatedDates[1]['dateStr'];
 
-        // Remove the first date (today) since all showtimes are past
         _generatedDates.removeAt(0);
-        // Keep selectedDateIndex at 0 (now points to tomorrow)
         selectedDateIndex = 0;
 
-        // Add a 7th date to maintain 6 available dates
         final lastDate =
             _generatedDates.isNotEmpty
                 ? DateTime.parse(_generatedDates.last['dateStr'] as String)
@@ -825,12 +773,10 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
           '   ✅ Removed date, dates NOW: ${_generatedDates.map((d) => '${d['num']} ${d['month']}').toList()}',
         );
 
-        // Trigger rebuild so UI updates to show new date list
         setState(() {
           _isLoading = true;
         });
 
-        // Fetch the captured next date after state updates
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _fetchShowtimesForSpecificDate(nextDateStr, isAutoAdvance: true);
         });
@@ -838,12 +784,9 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
       }
 
       setState(() {
-        // Merge new showtimes with existing ones instead of replacing
         final newShowtimes = List<Map<String, dynamic>>.from(data);
 
-        // Check if these are new showtimes for a different date
         if (newShowtimes.isEmpty) {
-          // API returned empty data - keep existing showtimes
           print(
             'API returned empty data - keeping existing ${_showtimes.length} showtimes',
           );
@@ -851,7 +794,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
           final existingDates = _groupShowtimesByDate(_showtimes).keys.toSet();
           final newDates = _groupShowtimesByDate(newShowtimes).keys.toSet();
 
-          // If there are new dates, merge them; otherwise replace (same date fetched again)
           if (newDates.isNotEmpty && !existingDates.containsAll(newDates)) {
             _showtimes.addAll(newShowtimes);
             print('Merged ${newShowtimes.length} new showtimes');
@@ -879,7 +821,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
         print('Available languages: $_availableLanguages');
         print('Available genres: $_availableGenres');
         _isLoading = false;
-        // Only skip to first date with showtimes on initial load, not on manual selection
         if (!isAutoAdvance) {
           _skipToFirstDateWithShowtimes();
         }
@@ -1031,11 +972,9 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
       return;
     }
 
-    // Check each date starting from today (index 0)
     for (int i = 0; i < _generatedDates.length; i++) {
       final dateStr = _generatedDates[i]['dateStr'];
 
-      // Get all showtimes for this date
       final showtimesForDate =
           _showtimes.where((showtime) {
             final startTimeStr = showtime['start_time']?.toString() ?? '';
@@ -1046,7 +985,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
             return showDate == dateStr;
           }).toList();
 
-      // Filter out past showtimes for this date
       final validShowtimes =
           showtimesForDate
               .where(
@@ -1057,15 +995,12 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
               )
               .toList();
 
-      // If this date has valid (non-past) showtimes, use it
       if (validShowtimes.isNotEmpty) {
         selectedDateIndex = i;
         print('First date with valid showtimes: $dateStr (index: $i)');
         return;
       }
     }
-
-    // If no date has valid showtimes, stay at index 0
     selectedDateIndex = 0;
   }
 
@@ -1076,6 +1011,106 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
     if (_genreSelected.length != _availableGenres.length) {
       _genreSelected = List<bool>.filled(_availableGenres.length, false);
     }
+  }
+
+  double _calculateSimilarity(String s1, String s2) {
+    if (s1.isEmpty && s2.isEmpty) return 1.0;
+    if (s1.isEmpty || s2.isEmpty) return 0.0;
+
+    final len1 = s1.length;
+    final len2 = s2.length;
+    final maxLen = len1 > len2 ? len1 : len2;
+
+    final d = List<List<int>>.generate(
+      len1 + 1,
+      (i) => List<int>.generate(len2 + 1, (j) => 0),
+    );
+
+    for (int i = 0; i <= len1; i++) {
+      d[i][0] = i;
+    }
+    for (int j = 0; j <= len2; j++) {
+      d[0][j] = j;
+    }
+
+    for (int i = 1; i <= len1; i++) {
+      for (int j = 1; j <= len2; j++) {
+        final cost = s1[i - 1] == s2[j - 1] ? 0 : 1;
+        d[i][j] = [
+          d[i - 1][j] + 1,
+          d[i][j - 1] + 1,
+          d[i - 1][j - 1] + cost,
+        ].reduce((a, b) => a < b ? a : b);
+      }
+    }
+
+    return 1.0 - (d[len1][len2] / maxLen);
+  }
+
+  bool _fuzzyMatch(String query, String text) {
+    if (query.isEmpty) return true;
+    if (text.isEmpty) return false;
+
+    final normalizedQuery = query.toLowerCase().trim().replaceAll(
+      RegExp(r'\s+'),
+      '',
+    );
+    final normalizedText = text.toLowerCase().trim().replaceAll(
+      RegExp(r'\s+'),
+      '',
+    );
+
+    if (normalizedText.contains(normalizedQuery)) return true;
+
+    var queryIdx = 0;
+    for (
+      int i = 0;
+      i < normalizedText.length && queryIdx < normalizedQuery.length;
+      i++
+    ) {
+      if (normalizedText[i] == normalizedQuery[queryIdx]) {
+        queryIdx++;
+      }
+    }
+    if (queryIdx == normalizedQuery.length) return true;
+
+    final similarity = _calculateSimilarity(normalizedQuery, normalizedText);
+    return similarity > 0.65; 
+  }
+
+  double _getMatchScore(String query, String text) {
+    final normalizedQuery = query.toLowerCase().trim().replaceAll(
+      RegExp(r'\s+'),
+      '',
+    );
+    final normalizedText = text.toLowerCase().trim().replaceAll(
+      RegExp(r'\s+'),
+      '',
+    );
+
+    if (normalizedText == normalizedQuery) return 100.0;
+
+    if (normalizedText.startsWith(normalizedQuery)) return 90.0;
+
+    if (normalizedText.contains(normalizedQuery)) return 80.0;
+
+    var queryIdx = 0;
+    var matchCount = 0;
+    for (
+      int i = 0;
+      i < normalizedText.length && queryIdx < normalizedQuery.length;
+      i++
+    ) {
+      if (normalizedText[i] == normalizedQuery[queryIdx]) {
+        queryIdx++;
+        matchCount++;
+      }
+    }
+    if (queryIdx == normalizedQuery.length) {
+      return 70.0 * (matchCount / normalizedQuery.length);
+    }
+
+    return _calculateSimilarity(normalizedQuery, normalizedText) * 60.0;
   }
 
   List<String> _getMovieSuggestions(String query) {
@@ -1091,13 +1126,18 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
       }
     }
 
-    final filtered =
-        movieTitles
-            .where((title) => title.toLowerCase().contains(query.toLowerCase()))
-            .toList();
+    final matches = <Map<String, dynamic>>[];
+    for (var title in movieTitles) {
+      if (_fuzzyMatch(query, title)) {
+        final score = _getMatchScore(query, title);
+        matches.add({'title': title, 'score': score});
+      }
+    }
 
-    filtered.sort();
-    return filtered;
+    matches.sort(
+      (a, b) => (b['score'] as double).compareTo(a['score'] as double),
+    );
+    return matches.map((m) => m['title'] as String).toList();
   }
 
   final List<Map<String, dynamic>> theatres = [
@@ -1141,7 +1181,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Listen for region changes and navigate to cinema screen
     ref.listen(selectedRegionProvider, (previous, next) {
       if (previous != null && previous != next) {
         print(
@@ -1154,6 +1193,7 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
     _ensureFiltersReady();
     return Scaffold(
       key: _scaffoldKey,
+      backgroundColor: const Color(0xFF2B1967),
       drawerEnableOpenDragGesture: false,
       drawer: SizedBox(
         width: MediaQuery.of(context).size.width * 0.9,
@@ -1180,27 +1220,31 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
           },
         ),
       ),
-      bottomNavigationBar: CustomBottomNav(
-        currentIndex: 1,
-        onTap: (index) {
-          // Pop the cinema detail screen first, then navigate
-          Navigator.of(context).pop();
-          // Delay the state change slightly to ensure the pop completes first
-          Future.delayed(const Duration(milliseconds: 100), () {
-            if (context.mounted) {
-              ref.read(bottomNavIndexProvider.notifier).state = index;
-              if (index != 1) {
-                ref.read(selectedCinemaChainProvider.notifier).state = null;
-                ref.read(selectedCinemaLocationProvider.notifier).state = null;
-                ref.read(selectedMovieTitleProvider.notifier).state = null;
+      bottomNavigationBar: SafeArea(
+        top: false,
+        maintainBottomViewPadding: true,
+        child: CustomBottomNav(
+          currentIndex: 1,
+          onTap: (index) {
+            Navigator.of(context).pop();
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (context.mounted) {
+                ref.read(bottomNavIndexProvider.notifier).state = index;
+                if (index != 1) {
+                  ref.read(selectedCinemaChainProvider.notifier).state = null;
+                  ref.read(selectedCinemaLocationProvider.notifier).state =
+                      null;
+                  ref.read(selectedMovieTitleProvider.notifier).state = null;
+                }
               }
-            }
-          });
-        },
+            });
+          },
+        ),
       ),
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
         child: SafeArea(
+          bottom: false,
           child: GestureDetector(
             onTap: () {
               FocusScope.of(context).unfocus();
@@ -1226,16 +1270,9 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                     generatedDates: _generatedDates,
                     selectedDateIndex: selectedDateIndex,
                     onDateSelected: (index) {
-                      print(
-                        '🔵 USER SELECTED DATE: index=$index, dateStr=${_generatedDates.isNotEmpty && index < _generatedDates.length ? _generatedDates[index]['dateStr'] : "INVALID"}',
-                      );
-                      print(
-                        '   Generated dates BEFORE: ${_generatedDates.map((d) => '${d['num']} ${d['month']}').toList()}',
-                      );
                       setState(() {
                         selectedDateIndex = index;
                       });
-                      // Pass isAutoAdvance=true to prevent auto-advance when user manually selects
                       _fetchShowtimes(isAutoAdvance: true);
                     },
                     langList: _availableLanguages,
@@ -1355,7 +1392,7 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         if (_generatedDates.isEmpty) {
-                          return Center(
+                          return const Center(
                             child: Padding(
                               padding: EdgeInsets.all(32.0),
                               child: Text(
@@ -1384,7 +1421,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                                 ? null
                                 : _availableLanguages[selectedLangIndex];
 
-                        // Get selected filters from state
                         final selectedExperiences = <String>[];
                         for (int i = 0; i < _xpSelected.length; i++) {
                           if (_xpSelected[i]) {
@@ -1401,7 +1437,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
 
                         final filteredShowtimes =
                             showtimesForDate.where((showtime) {
-                              // Filter out past showtimes
                               final startTimeStr =
                                   showtime['start_time']?.toString() ?? '';
                               if (startTimeStr.isNotEmpty) {
@@ -1410,7 +1445,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                                 }
                               }
 
-                              // Filter by language
                               if (selectedLanguage != null) {
                                 final language = showtime['language'] ?? '';
                                 if (!language.toString().toLowerCase().contains(
@@ -1420,25 +1454,6 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
                                 }
                               }
 
-                              // Filter by experience (screen type)
-                              if (selectedExperiences.isNotEmpty) {
-                                final screenName =
-                                    (showtime['screen_name'] ?? '')
-                                        .toString()
-                                        .toUpperCase();
-                                bool hasMatchingExperience = false;
-                                for (final exp in selectedExperiences) {
-                                  if (screenName.contains(exp.toUpperCase())) {
-                                    hasMatchingExperience = true;
-                                    break;
-                                  }
-                                }
-                                if (!hasMatchingExperience) {
-                                  return false;
-                                }
-                              }
-
-                              // Filter by genre
                               if (selectedGenres.isNotEmpty) {
                                 final genreList =
                                     (showtime['genres'] as List?)
@@ -1488,30 +1503,32 @@ class _CinemaDetailScreenState extends ConsumerState<CinemaDetailScreen> {
 
                         List<Map<String, dynamic>> theatreMovieList = [];
 
-for (var theatreEntry in groupedByTheatreAndMovie.entries) {
-  for (var movieEntry in theatreEntry.value.entries) {
-    theatreMovieList.add({
-      'theatre_name': theatreEntry.key,
-      'movie_title': movieEntry.key,
-      'showtimes': movieEntry.value,
-    });
-  }
-}
+                        for (var theatreEntry
+                            in groupedByTheatreAndMovie.entries) {
+                          for (var movieEntry in theatreEntry.value.entries) {
+                            theatreMovieList.add({
+                              'theatre_name': theatreEntry.key,
+                              'movie_title': movieEntry.key,
+                              'showtimes': movieEntry.value,
+                            });
+                          }
+                        }
 
-// ⭐ Premium FIRST (after list is built)
-if (selectedInfoIndex == 2) {
-  theatreMovieList.sort((a, b) {
-    final aPremium = (a['showtimes'] as List)
-        .where((s) => _hasPremiumSeats(s))
-        .length;
+                        if (selectedInfoIndex == 2) {
+                          theatreMovieList.sort((a, b) {
+                            final aPremiumCount =
+                                (a['showtimes'] as List)
+                                    .where((s) => s['isPremium'] == true)
+                                    .length;
 
-    final bPremium = (b['showtimes'] as List)
-        .where((s) => _hasPremiumSeats(s))
-        .length;
+                            final bPremiumCount =
+                                (b['showtimes'] as List)
+                                    .where((s) => s['isPremium'] == true)
+                                    .length;
 
-    return bPremium.compareTo(aPremium);
-  });
-}
+                            return bPremiumCount.compareTo(aPremiumCount);
+                          });
+                        }
 
                         if (_movieSearchQuery.isNotEmpty ||
                             _genreSearchQuery.isNotEmpty) {
@@ -1535,19 +1552,12 @@ if (selectedInfoIndex == 2) {
                                       item['showtimes']
                                           as List<Map<String, dynamic>>;
                                   genreMatch = showtimes.any((showtime) {
-                                    // Search by genre in the showtime/movie data
-                                    // Try multiple genre field names for compatibility
                                     final genreList =
                                         (showtime['genres'] as List?)
                                             ?.cast<String>() ??
                                         (showtime['movie_genres'] as List?)
                                             ?.cast<String>() ??
                                         [];
-
-                                    print(
-                                      'DEBUG: Searching genres: $genreList for query: $genreSearchLower',
-                                    );
-
                                     return genreList.any(
                                       (genre) => genre.toLowerCase().contains(
                                         genreSearchLower,
@@ -1579,20 +1589,20 @@ if (selectedInfoIndex == 2) {
                         }
 
                         if (index == 0 && filteredShowtimes.isEmpty) {
-                          return Center(
+                          return const Center(
                             child: Padding(
-                              padding: const EdgeInsets.all(32.0),
+                              padding: EdgeInsets.all(32.0),
                               child: Column(
                                 children: [
-                                  const Icon(
+                                  Icon(
                                     Icons.calendar_today,
                                     color: Colors.white30,
                                     size: 48,
                                   ),
-                                  const SizedBox(height: 16),
+                                  SizedBox(height: 16),
                                   Text(
                                     'No showtimes available',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       color: Colors.white70,
                                       fontSize: 14,
                                     ),
@@ -1612,7 +1622,6 @@ if (selectedInfoIndex == 2) {
                         final theatreShowtimes =
                             theatreMovieList[index]['showtimes'];
                         final firstShowtime = theatreShowtimes.first;
-                        final cinema = firstShowtime['cinema'];
 
                         return GestureDetector(
                           onTap: () {},
@@ -1800,16 +1809,21 @@ if (selectedInfoIndex == 2) {
                                               const NeverScrollableScrollPhysics(),
                                           gridDelegate:
                                               const SliverGridDelegateWithFixedCrossAxisCount(
-                                                crossAxisCount: 4,
+                                                crossAxisCount: 3,
                                                 crossAxisSpacing: 8,
                                                 mainAxisSpacing: 8,
-                                                childAspectRatio: 1.2,
+                                                childAspectRatio: 1.8,
                                               ),
                                           itemCount: theatreShowtimes.length,
                                           itemBuilder: (context, idx) {
                                             final showtime =
                                                 theatreShowtimes[idx];
-                                                final bool isPremium = _hasPremiumSeats(showtime);
+                                            final seatTypes =
+                                            (showtime['seatTypes'] as List?)?.cast<String>() ?? [];
+
+                                            final seatLabel = seatTypes.isNotEmpty
+                                                ? seatTypes.join(', ')
+                                                : 'Standard';
 
                                             final seats =
                                                 (showtime['seats'] as List?)
@@ -1850,80 +1864,84 @@ if (selectedInfoIndex == 2) {
                                                 }
                                               },
                                               child: Stack(
-                                                children: [ 
+                                                children: [
                                                   Container(
-                                                padding: const EdgeInsets.all(
-                                                  6,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white
-                                                      .withOpacity(0.1),
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                  border: Border.all(
-                                                    color: Colors.white
-                                                        .withOpacity(0.2),
-                                                    width: 1,
-                                                  ),
-                                                ),
-                                                child: Column(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    Text(
-                                                      _formatTime(
-                                                        showtime['start_time'],
-                                                      ),
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w700,
+                                                    padding:
+                                                        const EdgeInsets.all(6),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white
+                                                          .withOpacity(0.1),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      border: Border.all(
+                                                        color: Colors.white
+                                                            .withOpacity(0.2),
+                                                        width: 1,
                                                       ),
                                                     ),
-                                                    const SizedBox(height: 6),
-                                                    Row(
+                                                    child: Column(
                                                       mainAxisAlignment:
                                                           MainAxisAlignment
-                                                              .spaceBetween,
+                                                              .center,
                                                       children: [
-                                                        Expanded(
-                                                          child: Text(
-                                                            showtime['screen_name'] ??
-                                                                'Screen',
-                                                            maxLines: 1,
-                                                            overflow:
-                                                                TextOverflow
-                                                                    .ellipsis,
-                                                            style: const TextStyle(
-                                                              color:
-                                                                  Colors
-                                                                      .white70,
-                                                              fontSize: 8,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                          width: 4,
-                                                        ),
                                                         Text(
-                                                          '\$$minPrice',
+                                                          _formatTime(
+                                                            showtime['start_time'],
+                                                          ),
                                                           style:
                                                               const TextStyle(
                                                                 color:
                                                                     Colors
                                                                         .white,
-                                                                fontSize: 11,
+                                                                fontSize: 16,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                              ),
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 6,
+                                                        ),
+                                                        Row(
+                                                          mainAxisAlignment:
+                                                              MainAxisAlignment
+                                                                  .spaceBetween,
+                                                          mainAxisSize:
+                                                              MainAxisSize.max,
+                                                          children: [
+                                                            
+                                                            Expanded(
+                                                              child: Text(
+                                                                seatLabel,
+                                                                maxLines: 1,
+                                                                overflow: TextOverflow.ellipsis,
+                                                                style: const TextStyle(
+                                                                  color: Colors.white70,
+                                                                  fontSize: 8,
+                                                                  fontWeight: FontWeight.w600,
+                                                                ),
+                                                              ),
+
+                                                            ),
+                                                            Text(
+                                                              '\$$minPrice',
+                                                              style: const TextStyle(
+                                                                color:
+                                                                    Colors
+                                                                        .white,
+                                                                fontSize: 8,
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .w600,
                                                               ),
+                                                            ),
+                                                          ],
                                                         ),
                                                       ],
                                                     ),
-                                                  ],
-                                                ),
-                                              ),
+                                                  ),
                                                 ],
                                               ),
                                             );
@@ -1953,8 +1971,7 @@ if (selectedInfoIndex == 2) {
                                                 _availableLanguages.length
                                         ? null
                                         : _availableLanguages[selectedLangIndex];
-
-                                // Get selected filters from state
+                                
                                 final selectedExperiences = <String>[];
                                 for (int i = 0; i < _xpSelected.length; i++) {
                                   if (_xpSelected[i]) {
@@ -1980,7 +1997,6 @@ if (selectedInfoIndex == 2) {
                                     groupedByDate[selectedDate] ?? [];
                                 final filteredShowtimes =
                                     showtimesForDate.where((showtime) {
-                                      // Filter out past showtimes
                                       final startTimeStr =
                                           showtime['start_time']?.toString() ??
                                           '';
@@ -1989,8 +2005,6 @@ if (selectedInfoIndex == 2) {
                                           return false;
                                         }
                                       }
-
-                                      // Filter by language
                                       if (selectedLanguage != null) {
                                         final language =
                                             showtime['language'] ?? '';
@@ -2003,8 +2017,6 @@ if (selectedInfoIndex == 2) {
                                           return false;
                                         }
                                       }
-
-                                      // Filter by experience (screen type)
                                       if (selectedExperiences.isNotEmpty) {
                                         final screenName =
                                             (showtime['screen_name'] ?? '')
@@ -2023,8 +2035,6 @@ if (selectedInfoIndex == 2) {
                                           return false;
                                         }
                                       }
-
-                                      // Filter by genre
                                       if (selectedGenres.isNotEmpty) {
                                         final genreList =
                                             (showtime['genres'] as List?)
@@ -2080,13 +2090,10 @@ if (selectedInfoIndex == 2) {
                                     in groupedByTheatreAndMovie.values) {
                                   totalCount += entry.length;
                                 }
-
-                                // If no showtimes, return 1 to show empty state message
                                 return totalCount > 0 ? totalCount : 1;
                               }()),
                     ),
                   ),
-                const SliverToBoxAdapter(child: SizedBox(height: 20)),
               ],
             ),
           ),
@@ -2097,29 +2104,20 @@ if (selectedInfoIndex == 2) {
 
   String _formatTime(String dateTimeString) {
     try {
-      // Parse the datetime - handle both UTC and local formats
       DateTime dateTime = DateTime.parse(dateTimeString);
 
-      // If the string doesn't contain 'Z', treat as local and convert to UTC
       if (!dateTimeString.contains('Z')) {
         dateTime = dateTime.toUtc();
       }
 
-      // Get selected region and timezone location
       final region = ref.read(selectedRegionProvider);
       final regionTimezoneMap = ref.read(availableAustralianTimezonesProvider);
       final timezoneName = regionTimezoneMap[region] ?? 'Australia/Sydney';
       final location = tz.getLocation(timezoneName);
 
-      // Convert UTC datetime to region timezone
       final regionalTime = tz.TZDateTime.from(dateTime, location);
       final formatter = DateFormat('HH:mm');
       final formattedTime = formatter.format(regionalTime);
-
-      // DEBUG: Print conversion info
-      print(
-        'TIME_CONVERSION: Input=$dateTimeString, Region=$region, UTC=${dateTime.toUtc()}, RegionTime=$regionalTime, Display=$formattedTime',
-      );
 
       return formattedTime;
     } catch (e) {
@@ -2130,32 +2128,21 @@ if (selectedInfoIndex == 2) {
 
   bool _isShowtimePassed(String startTimeStr) {
     try {
-      // Parse the showtime
       DateTime showtime = DateTime.parse(startTimeStr);
 
-      // Handle UTC format
       if (!startTimeStr.contains('Z')) {
         showtime = showtime.toUtc();
       }
 
-      // Get selected region and timezone location
       final region = ref.read(selectedRegionProvider);
       final regionTimezoneMap = ref.read(availableAustralianTimezonesProvider);
       final timezoneName = regionTimezoneMap[region] ?? 'Australia/Sydney';
       final location = tz.getLocation(timezoneName);
 
-      // Get current time in region's timezone
       final nowInRegion = tz.TZDateTime.from(DateTime.now().toUtc(), location);
       final showtimeInRegion = tz.TZDateTime.from(showtime, location);
 
-      // Compare times: if showtime is before current time, filter it out
       final isPassed = showtimeInRegion.isBefore(nowInRegion);
-
-      if (isPassed) {
-        print(
-          'FILTERED_SHOWTIME: $startTimeStr (Region: $region) - Showtime: $showtimeInRegion, Now: $nowInRegion',
-        );
-      }
 
       return isPassed;
     } catch (e) {
@@ -2196,36 +2183,6 @@ if (selectedInfoIndex == 2) {
       }
     }
     return maxAvailability;
-  }
-
-  bool _hasPremiumSeats(Map<String, dynamic> showtime) {
-    // Check for premium seat types
-    final seats =
-        (showtime['seats'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-    if (seats.isNotEmpty) {
-      for (var seat in seats) {
-        final seatType = (seat['type'] as String?)?.toLowerCase() ?? '';
-        if (seatType.contains('recliner') ||
-            seatType.contains('daybed') ||
-            seatType.contains('platinum') ||
-            seatType.contains('gold') ||
-            seatType.contains('vip')) {
-          return true;
-        }
-      }
-    }
-
-    // Check for premium screen types
-    final screenName = (showtime['screen_name'] ?? '').toString().toLowerCase();
-    if (screenName.contains('recliner') ||
-        screenName.contains('boutique') ||
-        screenName.contains('4dx') ||
-        screenName.contains('3d') ||
-        screenName.contains('gold class')) {
-      return true;
-    }
-
-    return false;
   }
 
   String _formatMovieRating(dynamic rating) {
@@ -2508,7 +2465,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                                   <int, Map<String, dynamic>>{};
 
                               for (int i = 0; i < generatedDates.length; i++) {
-                                // Show all 6 generated dates
                                 dateDisplayMap[i] = generatedDates[i];
                               }
 
@@ -2689,14 +2645,12 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Builder(
                   builder: (context) {
-                    // Filter showtimes by selected date
                     final safeIndex =
                         selectedDateIndex >= generatedDates.length
                             ? 0
                             : selectedDateIndex;
                     final selectedDate = generatedDates[safeIndex]['dateStr'];
 
-                    // Group showtimes by date (using consistent date extraction)
                     Map<String, List<Map<String, dynamic>>> groupedByDate = {};
                     for (var showtime in showtimes) {
                       final startTimeStr =
@@ -2715,14 +2669,8 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
 
                     final showtimesForDate = groupedByDate[selectedDate] ?? [];
 
-                    print(
-                      'DEBUG_SUMMARY: selectedDate=$selectedDate, showtimesForDate.length=${showtimesForDate.length}',
-                    );
-
-                    // Apply the same filters as in the main list
                     final filteredShowtimesForSummary =
                         showtimesForDate.where((showtime) {
-                          // Filter out past showtimes
                           final startTimeStr =
                               showtime['start_time']?.toString() ?? '';
                           if (startTimeStr.isNotEmpty) {
@@ -2732,10 +2680,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                           }
                           return true;
                         }).toList();
-
-                    print(
-                      'DEBUG_SUMMARY: filteredShowtimesForSummary.length=${filteredShowtimesForSummary.length}',
-                    );
 
                     num cheapestPrice = double.maxFinite;
                     for (var showtime in filteredShowtimesForSummary) {
@@ -2753,8 +2697,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                       }
                     }
 
-                    print('DEBUG_SUMMARY: cheapestPrice=$cheapestPrice');
-
                     int maxAvailability = 0;
                     for (var showtime in filteredShowtimesForSummary) {
                       final availableSeats =
@@ -2771,8 +2713,6 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                         }
                       }
                     }
-
-                    print('DEBUG_SUMMARY: maxAvailability=$maxAvailability');
 
                     return InfoRowCard(
                       selected: selectedInfoIndex ?? 0,
@@ -2826,10 +2766,10 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                           ),
                           child: Row(
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.movie,
                                 size: 18,
-                                color: const Color(0xFFB863D7),
+                                color: Color(0xFFB863D7),
                               ),
                               const SizedBox(width: 12),
                               Expanded(

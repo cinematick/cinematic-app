@@ -562,20 +562,40 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
       );
 
       for (var showtime in showtimesArray) {
+        // Build seats array from seat_types if available
+        List<Map<String, dynamic>> seats = [];
+        if (showtime['seat_types'] is List) {
+          final seatTypes = showtime['seat_types'] as List;
+          final minPrice =
+              num.tryParse(showtime['min_price']?.toString() ?? '0') ?? 0;
+          final maxPrice =
+              num.tryParse(showtime['max_price']?.toString() ?? '0') ?? 0;
+          final avgPrice = (minPrice + maxPrice) / 2;
+
+          for (var seatType in seatTypes) {
+            seats.add({'type': seatType, 'price': avgPrice});
+          }
+        } else if (showtime['seats'] is List) {
+          seats = List<Map<String, dynamic>>.from(showtime['seats'] as List);
+        }
+
         flattenedShowtimes.add({
           'id': showtime['id'],
           'start_time': showtime['start_time'],
           'booking_url': showtime['booking_url'],
-          'cinema': showtime['cinema'],
+          'cinema':
+              showtime['cinema'] ??
+              {
+                'id': showtime['cinema_id'],
+                'name': showtime['cinema_name'] ?? 'Unknown',
+                'city': showtime['cinema_city'] ?? 'Unknown',
+              },
           'movie_title': movieTitle,
           'movie_id': movieId,
           'language': showtime['language'] ?? '',
-          'screen_name':
-              showtime['screenName'] ??
-              showtime['screen']?['name'] ??
-              'Standard',
-
-          'seats': showtime['seats'] ?? [],
+          'seat_types': showtime['seat_types'] ?? [],
+          'is_premium': showtime['is_premium'] ?? false,
+          'seats': seats,
           'total_seats': showtime['total_seats'],
           'total_seats_available': showtime['total_seats_available'],
         });
@@ -601,7 +621,24 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
         final cinemaName = cinema['name'] as String?;
         final city = cinema['city'] as String?;
 
-        if (cinemaName != null && city != null) {
+        // Try to get coordinates from API first
+        final cinemaLat = showtime['cinema_latitude'] as num?;
+        final cinemaLng = showtime['cinema_longitude'] as num?;
+
+        if (cinemaName != null && cinemaLat != null && cinemaLng != null) {
+          final distance = _calculateDistance(
+            _userPosition!.latitude,
+            _userPosition!.longitude,
+            cinemaLat.toDouble(),
+            cinemaLng.toDouble(),
+          );
+          _cinemaDistances[cinemaName] = distance;
+          distancesCalculated++;
+          print(
+            '$cinemaName distance: ${distance.toStringAsFixed(2)} km (from API)',
+          );
+        } else if (cinemaName != null && city != null) {
+          // Fallback to city-based coordinates
           final cityLower = city.toLowerCase().trim();
           final coords = _cityCoordinates[cityLower];
 
@@ -615,7 +652,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
             _cinemaDistances[cinemaName] = distance;
             distancesCalculated++;
             print(
-              '$cinemaName ($city) distance: ${distance.toStringAsFixed(2)} km',
+              '$cinemaName ($city) distance: ${distance.toStringAsFixed(2)} km (from map)',
             );
           } else {
             print('City "$city" not found in coordinates map');
@@ -724,36 +761,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     }
   }
 
-  final List<Map<String, dynamic>> theatres = [
-    {
-      'name': 'The Roxy Movie House',
-      'address': '789 Picture Rd, Sydney',
-      'distance': '8.3km',
-      'rating': '4.2',
-      'shows': [
-        {'time': '21:00', 'price': 16, 'highlight': false},
-      ],
-    },
-    {
-      'name': 'Cineplex Grand Central',
-      'address': '123 Movie Lane, Sydney',
-      'distance': '2.5km',
-      'rating': '4.5',
-      'shows': [
-        {'time': '19:15', 'price': 19, 'highlight': false},
-      ],
-    },
-    {
-      'name': 'Starlight Cinemas Downtown',
-      'address': '456 Film Ave, Sydney',
-      'distance': '5.1km',
-      'rating': '4.8',
-      'shows': [
-        {'time': '20:00', 'price': 26, 'highlight': true},
-      ],
-    },
-  ];
-
   final dateList = [
     {'label': 'Sun', 'num': '2', 'month': 'Nov'},
     {'label': 'Mon', 'num': '3', 'month': 'Nov'},
@@ -797,6 +804,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
     _ensureFiltersReady();
     return Scaffold(
       key: _scaffoldKey,
+      backgroundColor: const Color(0xFF2B1967),
       drawerEnableOpenDragGesture: false,
       drawer: SizedBox(
         width: MediaQuery.of(context).size.width * 0.9,
@@ -823,22 +831,28 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
           },
         ),
       ),
-      bottomNavigationBar: CustomBottomNav(
-        currentIndex: selectedNavIndex,
-        onTap: (index) {
-          ref.read(bottomNavIndexProvider.notifier).state = index;
-          if (index != 1) {
-            ref.read(selectedCinemaChainProvider.notifier).state = null;
-            ref.read(selectedCinemaLocationProvider.notifier).state = null;
-            ref.read(selectedMovieTitleProvider.notifier).state = null;
-          }
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        },
+      bottomNavigationBar: SafeArea(
+        top: false,
+        maintainBottomViewPadding: true,
+        child: CustomBottomNav(
+          currentIndex: selectedNavIndex,
+          onTap: (index) {
+            ref.read(bottomNavIndexProvider.notifier).state = index;
+            if (index != 1) {
+              ref.read(selectedCinemaChainProvider.notifier).state = null;
+              ref.read(selectedCinemaLocationProvider.notifier).state = null;
+              ref.read(selectedMovieTitleProvider.notifier).state = null;
+            }
+            Navigator.of(context).popUntil((route) => route.isFirst);
+          },
+        ),
       ),
       body: Container(
         decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
         child: SafeArea(
+          bottom: false,
           child: Stack(
+            clipBehavior: Clip.hardEdge,
             children: [
               NotificationListener<ScrollNotification>(
                 onNotification: (ScrollNotification scrollNotification) {
@@ -1411,35 +1425,29 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                                   const NeverScrollableScrollPhysics(),
                                               gridDelegate:
                                                   const SliverGridDelegateWithFixedCrossAxisCount(
-                                                    crossAxisCount: 4,
+                                                    crossAxisCount: 3,
                                                     crossAxisSpacing: 8,
                                                     mainAxisSpacing: 8,
-                                                    childAspectRatio: 1.2,
+                                                    childAspectRatio: 1.8,
                                                   ),
                                               itemCount:
                                                   theatreShowtimes.length,
                                               itemBuilder: (context, idx) {
                                                 final showtime =
                                                     theatreShowtimes[idx];
-                                                final seats =
-                                                    (showtime['seats'] as List?)
-                                                        ?.cast<
-                                                          Map<String, dynamic>
-                                                        >() ??
-                                                    [];
                                                 final minPrice =
-                                                    seats.isNotEmpty
-                                                        ? seats
-                                                            .map(
-                                                              (s) =>
-                                                                  s['price']
-                                                                      as num,
-                                                            )
-                                                            .reduce(
-                                                              (a, b) =>
-                                                                  a < b ? a : b,
-                                                            )
-                                                        : 0;
+                                                    num.tryParse(
+                                                      showtime['min_price']
+                                                              ?.toString() ??
+                                                          '0',
+                                                    ) ??
+                                                    0;
+                                                    final seatTypes =
+                                                    (showtime['seat_types'] as List?)?.cast<String>() ?? [];
+
+                                                final seatLabel = seatTypes.isNotEmpty
+                                                    ? seatTypes.join(', ')
+                                                    : 'Standard';
 
                                                 return GestureDetector(
                                                   onTap: () async {
@@ -1501,15 +1509,15 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                                                 ),
                                                               ),
                                                               const SizedBox(
-                                                                height: 1,
+                                                                height: 4,
                                                               ),
                                                               Row(
                                                                 mainAxisAlignment:
                                                                     MainAxisAlignment
-                                                                        .start,
+                                                                        .spaceBetween,
                                                                 mainAxisSize:
                                                                     MainAxisSize
-                                                                        .min,
+                                                                        .max,
                                                                 children: [
                                                                   Flexible(
                                                                     child: Container(
@@ -1518,8 +1526,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                                                             2,
                                                                       ),
                                                                       child: Text(
-                                                                        showtime['screen_name'] ??
-                                                                            'Screen',
+                                                                        seatLabel,
                                                                         overflow:
                                                                             TextOverflow.ellipsis,
                                                                         style: const TextStyle(
@@ -1530,15 +1537,12 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                                                             253,
                                                                           ),
                                                                           fontSize:
-                                                                              7,
+                                                                              8,
                                                                           fontWeight:
                                                                               FontWeight.w600,
                                                                         ),
                                                                       ),
                                                                     ),
-                                                                  ),
-                                                                  const SizedBox(
-                                                                    width: 4,
                                                                   ),
                                                                   Text(
                                                                     minPrice ==
@@ -1550,7 +1554,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                                                           Colors
                                                                               .white,
                                                                       fontSize:
-                                                                          10,
+                                                                          8,
                                                                       fontWeight:
                                                                           FontWeight
                                                                               .w600,
@@ -1671,8 +1675,6 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
                                     }
                                   }
 
-                                  
-
                                   return true;
                                 }).toList();
 
@@ -1754,15 +1756,9 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
   num _getMinPrice(List<Map<String, dynamic>> showtimes) {
     num minPrice = double.maxFinite;
     for (var showtime in showtimes) {
-      final seats =
-          (showtime['seats'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-      if (seats.isNotEmpty) {
-        final price = seats
-            .map((s) => s['price'] as num)
-            .reduce((a, b) => a < b ? a : b);
-        if (price < minPrice) {
-          minPrice = price;
-        }
+      final price = num.tryParse(showtime['min_price']?.toString() ?? '0') ?? 0;
+      if (price > 0 && price < minPrice) {
+        minPrice = price;
       }
     }
     return minPrice == double.maxFinite ? 0 : minPrice;
@@ -1826,6 +1822,7 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
 
     final name = screenName.toLowerCase();
 
+    // Fallback to screen name checking if is_premium is not available
     return name.contains('recliner') ||
         name.contains('boutique') ||
         name.contains('4dx') ||
@@ -1834,13 +1831,8 @@ class _ShowTimeScreenState extends ConsumerState<ShowTimeScreen> {
   }
 
   bool _hasPremiumSeats(Map<String, dynamic> showtime) {
-    final screenName = (showtime['screen_name'] ?? '').toString().toLowerCase();
-
-    return screenName.contains('recliner') ||
-        screenName.contains('boutique') ||
-        screenName.contains('4dx') ||
-        screenName.contains('3d') ||
-        screenName.contains('gold class');
+    // Directly use is_premium from API
+    return showtime['is_premium'] as bool? ?? false;
   }
 
   List<Map<String, dynamic>> _sortShowtimesWithPremiumFirst(
@@ -2067,7 +2059,7 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
                               final selected =
                                   originalIndex == selectedDateIndex;
                               final dateData = dateDisplayMap[originalIndex]!;
-
+                              
                               return Padding(
                                 padding: EdgeInsets.only(
                                   left: listIndex == 0 ? 12 : 8,
@@ -2262,18 +2254,12 @@ class _StickyHeaderDelegate extends SliverPersistentHeaderDelegate {
 
                 num cheapestPrice = double.maxFinite;
                 for (var showtime in filteredShowtimes) {
-                  final seats =
-                      (showtime['seats'] as List?)
-                          ?.cast<Map<String, dynamic>>() ??
-                      [];
-                  if (seats.isNotEmpty) {
-                    final price = seats
-                        .map((s) => s['price'] as num)
-                        .reduce((a, b) => a < b ? a : b);
-                    // Only consider prices greater than 0
-                    if (price > 0 && price < cheapestPrice) {
-                      cheapestPrice = price;
-                    }
+                  final price =
+                      num.tryParse(showtime['min_price']?.toString() ?? '0') ??
+                      0;
+                  // Only consider prices greater than 0
+                  if (price > 0 && price < cheapestPrice) {
+                    cheapestPrice = price;
                   }
                 }
 
