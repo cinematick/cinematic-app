@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -88,6 +89,16 @@ class _CustomAppBarState extends ConsumerState<CustomAppBar> {
     });
 
     try {
+      // Check if location services are enabled
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          _locationError = 'Location services are disabled';
+          _isDetectingLocation = false;
+        });
+        return;
+      }
+
       // Check location permissions
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
@@ -103,20 +114,27 @@ class _CustomAppBarState extends ConsumerState<CustomAppBar> {
         return;
       }
 
-      // Get current position
+      // Get current position with timeout
       final Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 15),
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw Exception('Location request timed out'),
       );
 
       // Reverse geocode to get region/state
       final List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception('Geocoding request timed out'),
       );
 
       if (placemarks.isEmpty) {
         setState(() {
-          _locationError = 'Unsupported location';
+          _locationError = 'Unsupported location (no address found)';
           _isDetectingLocation = false;
         });
         return;
@@ -129,7 +147,7 @@ class _CustomAppBarState extends ConsumerState<CustomAppBar> {
 
       if (adminArea == null || adminArea.isEmpty) {
         setState(() {
-          _locationError = 'Unsupported location';
+          _locationError = 'Unsupported location (outside Australia)';
           _isDetectingLocation = false;
         });
         return;
@@ -155,12 +173,19 @@ class _CustomAppBarState extends ConsumerState<CustomAppBar> {
           _saveRegionToCache(matchedRegion);
           Navigator.pop(context);
         } else {
-          _locationError = 'Unsupported location';
+          _locationError = 'Unsupported location (outside Australia)';
         }
       });
+    } on TimeoutException catch (e) {
+      setState(() {
+        _locationError = 'Location request timed out. Try again.';
+        _isDetectingLocation = false;
+      });
+      print('Timeout detecting location: $e');
     } catch (e) {
       setState(() {
-        _locationError = 'Error detecting location';
+        _locationError =
+            'Error detecting location: ${e.toString().replaceFirst('Exception: ', '')}';
         _isDetectingLocation = false;
       });
       print('Error detecting location: $e');
